@@ -12,8 +12,9 @@
 |---|---|
 | `serve/` — сервер и весь веб-интерфейс (включая доработки) | `bin/` — движок и библиотеки, ~800 МиБ |
 | `tools/` — то, что импортирует сервер | `models/` — паки моделей, ~94 ГиБ |
-| `docs/` | `data/` — профили экспертов и фикстуры бенча |
-| `basalt_config.json`, `Basalt.bat`, `serve_ctl.ps1` | `.venv/` — Python-окружение |
+| `docs/` | `.venv/` — Python-окружение |
+| `data/` — профили экспертов и фикстуры бенча (16 файлов) | |
+| `basalt_config.json`, `Basalt.bat`, `serve_ctl.ps1` | |
 
 Артефакты в `.gitignore`: веса и бинарники в git не попадают.
 
@@ -102,6 +103,9 @@ py -3 -m venv .venv
 .venv\Scripts\hf download jesdga/Qwen3.8-27B-Basalt Qwen3.8-27B-QUASAR-NVFP4.basalt --local-dir models
 ```
 
+Если `.venv\Scripts\hf` нет (старая версия `huggingface_hub`), тот же вызов называется
+`huggingface-cli download`.
+
 Ожидаемый результат:
 
 ```
@@ -112,11 +116,14 @@ models\Qwen3.8-27B-QUASAR-NVFP4.basalt    19.70 GiB
 `UD-IQ2_XS` — самая компактная из приемлемых квантизаций Flash-Next (KLD 0.1829,
 top-1 86.21 %). Менять её на `UD-IQ1_*` ради размера не стоит: качество просядет.
 
-## Шаг 5. `data/`
+## Шаг 5. `data/` — уже в клоне
 
-Из того же архива релиза скопировать `data\profiles\` и `data\bench\` в `data\`
-(профили экспертов и фикстуры для `basalt-bench`). Без них сервер работает, но
-`basalt-bench` и `basalt-probe` не найдут фикстур.
+`data\profiles\` (4 профиля экспертов, включая `qwen4exp-48x512.prof` для Flash-Next)
+и `data\bench\` (фикстуры для `basalt-bench` и `basalt-probe`) отслеживаются upstream
+и приходят с клонированием — из архива релиза их копировать не нужно.
+
+Свои профили, сгенерированные `--expert-profile-save`, в git не попадают: строка
+`data/` в `.gitignore` скрывает только новые файлы, уже отслеживаемые остаются в репозитории.
 
 ## Шаг 6. Запуск
 
@@ -237,7 +244,7 @@ git reset --hard local-0.5.0    # или local-0.4.1
 | Файл | Что |
 |---|---|
 | `serve/web/index.html` | изменён: вкладки «Монитор» и «Настройки», подключение своих скриптов |
-| `serve/handler.py` | изменён: маршруты `/api/config`, `/api/model/caps`, `/api/logs` |
+| `serve/handler.py` | изменён: маршруты `/api/config` (GET и POST), `/api/model/caps`, `/api/vram`, `/api/restart` |
 | `serve/api/config_api.py` | добавлен: чтение/запись конфига, runtime-статус |
 | `serve/web/chat.js` | добавлен: чат с потоковой выдачей, reasoning, tool-calls |
 | `serve/web/settings.js` | добавлен: редактор конфига в веб-интерфейсе |
