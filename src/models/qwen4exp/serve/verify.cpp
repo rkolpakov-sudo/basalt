@@ -1,6 +1,8 @@
 // src/models/qwen4exp/serve/verify.cpp - verify operations for the persistent engine.
 #include "basalt/models/qwen4exp/shared_names.hpp"
 #include "qfn_state.hpp"
+#include "basalt/core/load_progress.hpp"
+#include "basalt/core/elastic_kv.hpp"
 
 namespace basalt::models::qwen4exp::serve {
 
@@ -206,18 +208,16 @@ int QfnRuntime::capture_windows() {
     kv_ceiling_note();
     if (kv_ceiling_sent >= 0) {
         const int n = std::max(o.batch, 1);
-        basalt::log::info("basalt serve", "elastic KV: about %lld cells fit in the %d session%s (%lld at full "
-                          "context) before the expert cache reaches the %lld slots a prompt chunk needs",
-                          (long long) kv_ceiling_sent, n, n == 1 ? "" : "s", (long long) n * o.max_context,
-                          (long long) cache_floor_slots());
+        basalt::core::log_elastic_kv_ceiling(kv_ceiling_sent, n, (int64_t) n * o.max_context, cache_floor_slots());
     }
     std::printf("INFO %s\n", basalt::program::spill_words(tier_spill).c_str());   // experts only the file holds
+    basalt::core::LoadProgress::complete();   // the weights bar ends before the engine says ready
     std::printf("READY %lld stop\n", (long long) o.max_context);   // "stop": this engine honours STOP
     std::fflush(stdout);
 
     rounds = 0;
     sfx.emplace(std::max(1, o.suffix_draft), 64, (size_t) o.max_context + 4096);
-    policy.emplace(S);   // MTP or lookup window, learned over the whole process
+    policy.emplace(S, 0.03, false);   // MTP or lookup window, learned over the whole process
     // The vision path (--vision): GENI <max_new> <embeddings file> <id,id,...> carries images and videos.  The
     // file is one or more basalt-vision records (int32 'SVE1', n, nx, ny, n_embd, then n x n_embd floats) in prompt
     // order, one per picture and one per two-frame video group; each record's rows go to its run of <|image_pad|> or
@@ -236,7 +236,7 @@ int QfnRuntime::capture_windows() {
     // adaptive tier carries on from there.
     chunk_full = o.prefill_chunk;              // the loan's chunk with the whole cache
 
-    // ---- the elastic KV (kKvElasticFloor): a session's K/V pools back their cells on demand, out of the expert
+    // ---- the elastic KV (core::kElasticKvBase): a session's K/V pools back their cells on demand, out of the expert
     // cache's tail.  `kv_fit` backs `cells` of a session before anything writes them: the work in flight lands,
     // the cache gives back its last segments (their experts become CPU misses, read from their RAM copies), and the
     // pools map that VRAM, zeroed.  `kv_release` gives a session's cells past `cells` back and the cache maps its

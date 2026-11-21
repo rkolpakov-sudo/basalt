@@ -5,7 +5,7 @@ Settings: [configuration](configuration/index.md). Diagnostic flags: `bin/basalt
 ## Start-up
 
 The page is up at once and the model loads behind it. The header reads `Loading` with the percent over a progress bar while weights load; choosing a model in the picker loads it. `/health` and `/metrics`
-show the load. A failed start-up load ends the server. Requests wait during a load and get a 503 if it fails.
+show the load: `load.percent` and `load.gib`, the GiB placed so far in one figure over every byte the model loads (a card, a second card, RAM), where it was one figure per target. A failed start-up load ends the server. Requests wait during a load and get a 503 if it fails.
 
 ## Concurrent requests: `--parallel N`
 
@@ -43,12 +43,14 @@ Each request ends with one `done` line:
 ```
 
 - `pp=<prompt tokens>/<cached>c`: the rate counts newly read tokens only.
-- `acc`: drafts accepted over drafts offered. `dl`: tokens per window. Both are absent when the request did not draft.
+- `acc`: drafts accepted over drafts offered. `dl`: tokens per window, from the engine's own window count over the whole request (its solo and batch runs and every pass). With `--parallel` a window serves every busy slot in a fixed number of rows, so `dl` falls toward 1.0 as the slots fill. Both are absent when the request did not draft.
 - `end`: `stop`, `length`, `cancelled`, `disconnect` or `error`.
 - `hit`: expert cache hit rate. `pcie`: share of routed experts read over PCIe.
 
 The engine's own `basalt ...` lines go to `~/.cache/basalt/<id>/engine.log`, one folder per model file (`<id>` is 16 hex digits
-taken from the file); `[server] engine log: PATH` names it when the engine fails to start. The folder also holds the conversation
+taken from the file); `[server] engine log: PATH` names it at start. A log of 10 MiB or more moves to `engine.log.1` at the
+next start. An engine that dies of a fault or an unhandled exception writes a `basalt crash: error: ...` line (the fault, the stage
+it was in) and the server's warning quotes it with the exit status. The folder also holds the conversation
 cache. Nothing is unpacked from the model file: the server reads the tokenizer from its sections, and the engine and `basalt-vision`
 read the vision projector inside it.
 
@@ -117,7 +119,9 @@ last bits of the logits, so a greedy answer can fork after some tokens (`dynamic
 | `dynamic` | inside the engine, on the main GPU | none at rest (0.85 GiB pinned RAM) | 0.77 s / 1.45 s / 1.8 s |
 | `cpu` | sidecar on the CPU | none | about 6 s / 40 s / 70 s |
 
-`dynamic` borrows the cache's last slots per image and refills them afterwards (about 70 ms), so the cache is identical after. Which
+`dynamic` borrows the cache's last slots per image and refills them afterwards (about 70 ms), so the cache is identical after.
+Hy4-flash reads images with `dynamic` only: its main-card expert slots go back for the request's pictures and fill again as after a
+prompt. Which
 images a request may name: [image sources](configuration/image-sources.md). An image may not sit in a system prompt.
 
 ## Video

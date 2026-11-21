@@ -23,6 +23,7 @@ class GgufFile;
 }
 namespace basalt::core {
 struct ConversationKv;
+class LoadPlan;
 }
 namespace basalt::program {
 struct CommonOptions;
@@ -64,7 +65,9 @@ struct TokenizerSpec {
 };
 
 /// Outcome of a model operation.
-enum class Status { Ok, NotImplemented, Error };
+/// Refused: the request cannot run (no room for its positions) and the session holds what it held before it; the engine
+/// answers ERR and serves the next request. Error: the session cannot go on.
+enum class Status { Ok, NotImplemented, Error, Refused };
 
 struct Result {
     Status status = Status::Ok;
@@ -100,6 +103,7 @@ struct LoadRequest {
     RopeFlags rope;                   ///< the rope scaling flags, for a model that takes them (rope_flags.hpp)
     int64_t kv_resident = 0;          ///< --kv-resident: K/V cells per attention layer kept in VRAM (0: all)
     std::vector<double> card_gbps;    ///< memory bandwidth of the main card, then of each peer device (GB/s, 0: unknown)
+    int diag_rows = 0;                ///< diagnostic: rows of one forward call of a prompt (0: the model's own chunk)
     int diag_split_at = 0;            ///< diagnostic: a dense model's layers split at this one across two cards (0: off)
 };
 
@@ -221,6 +225,9 @@ public:
     virtual ExpertCounts expert_counts() const { return {}; }
     /// Facts for the engine's INFO lines once the session is prepared: `key=value` words.
     virtual std::string info_words() const { return {}; }
+    /// An elastic KV's ceiling (core/elastic_kv.hpp): the positions the session can back before the expert cache would go below
+    /// the slots a prompt chunk needs; -1 without an elastic KV.
+    virtual int64_t kv_ceiling() { return -1; }
     /// An encoded picture: `n_rows` embedding rows of the model's width (the encoder's whole block), and its grid of
     /// merged tokens when the model places rows by it (else {0, 0}). Rows with no vision support leave the default.
     virtual Result encode_image(const uint8_t* data, size_t bytes, std::vector<float>& rows, int& n_rows, ImageGrid& grid) {
@@ -245,17 +252,31 @@ public:
     }
 };
 
-/// A loaded model: weights resolved, ready to make sessions.
+/// A model and its sessions.  Its start runs in three steps (ModelAdapter::start): the model's plan, the one pass that
+/// places every byte the plan queued (core::place_start), and the model's attach.
 class LoadedModel {
 public:
     virtual ~LoadedModel() = default;
     virtual const ModelDesc& desc() const = 0;
     /// The context the loaded model runs with, when it sizes that itself (0: the caller's --max-context stands).
     virtual int64_t context() const { return 0; }
-    virtual Result make_session(std::unique_ptr<ModelSession>& out) = 0;
+    /// Everything the model will hold is decided and allocated, in the order its sizing depends on (its weights, then what
+    /// is sized from the memory left: caches, tiers, prompt stages), and every byte it reads is queued in `reads`; no byte
+    /// is placed.  The model makes its req.sessions sessions here, into `sessions`, when what it sizes from the memory left
+    /// must see their state; else in attach().
+    virtual Result plan(const LoadRequest& req, core::LoadPlan& reads, std::vector<std::unique_ptr<ModelSession>>& sessions) = 0;
+    /// Once every queued byte has landed: the model connects what the reads filled (prompt stages, copies made from the
+    /// weights, checks of what was placed) and makes its sessions if plan() did not; they are then ready to run.
+    virtual Result attach(const LoadRequest& req, std::vector<std::unique_ptr<ModelSession>>& sessions) = 0;
 };
 
-/// The texts of the model's own tokens in the pack's vocabulary: the defaults of --eos-ids, --turn-token, --image-pad-id,
+/// A started model and its sessions.
+struct Started {
+    std::unique_ptr<LoadedModel> model;
+    std::vector<std::unique_ptr<ModelSession>> sessions;
+};
+
+/// The texts of the model's own tokens in the pack's vocabulary (a name may hold one `*` for a suffix that differs between files): the defaults of --eos-ids, --turn-token, --image-pad-id,
 /// and a video group's pad ("" for a model that reads no video).
 struct TokenNames {
     std::vector<std::string> eos;
@@ -277,13 +298,17 @@ public:
     virtual std::string validate(const GgufFile& meta) const = 0;
     /// Geometry from the file's metadata.
     virtual ModelDesc describe(const GgufFile& meta) const = 0;
-    virtual Result load(const LoadRequest& req, std::unique_ptr<LoadedModel>& out) const = 0;
+    /// The model a start runs, before its plan; null for a model with its own start (run()).
+    virtual std::unique_ptr<LoadedModel> make_model() const { return nullptr; }
+    /// The start: the model's plan, the bytes it queued announced as the start's total and placed in one pass, its attach;
+    /// then the load bar ends.
+    Result start(const LoadRequest& req, Started& out) const;
     /// The file names under data/profiles the engine ships for the pack `key` ("<arch>-<layers>x<experts>") names; the
     /// start refuses when one is missing. Empty for a pack the engine ships no profile for.
     virtual std::vector<std::string> shipped_profiles(const std::string& /*key*/) const { return {}; }
     virtual std::vector<SideTableSpec> side_tables(const ModelDesc&) const { return {}; }
     virtual TokenizerSpec tokenizer_spec() const = 0;
-    /// A model with its own start and serving runs them here to the exit code; nullopt: the shared server runs load()'s sessions.
+    /// A model with its own start and serving runs them here to the exit code; nullopt: the shared server runs start()'s sessions.
     virtual std::optional<int> run(program::CommonOptions& o, std::vector<program::GpuCard>& cards) const {
         (void) o; (void) cards;
         return std::nullopt;
@@ -298,7 +323,7 @@ public:
     virtual int quality_window() const { return 1; }
     /// The cards that may hold experts beside the main one.
     virtual int max_expert_cards() const = 0;
-    /// A model with no experts to put on a second card reads long prompts there instead (a prompt line, not an expert tier).
+    /// A model with no experts to put on a second card reads long prompts there instead (a one-stage prompt split, not an expert tier).
     virtual bool second_card_reads_prompts() const { return false; }
     /// Such a model with these flags does not fit its main card and splits its layers across the main card and the second
     /// (a layer stage), given the two cards' memory bandwidth; asked once the run's cards are visible, before the load.

@@ -15,6 +15,8 @@
 #include "models/deepseek41/meta.hpp"
 #include "models/deepseek41/model.hpp"
 
+#include <cuda_runtime.h>
+
 #include <cstdint>
 #include <cstdlib>
 #include <vector>
@@ -36,28 +38,7 @@ public:
         return {key + ".prof", key + "-dspark.prof"};
     }
 
-    model::Result load(const model::LoadRequest& req, std::unique_ptr<model::LoadedModel>& out) const override {
-        if (req.paths.empty()) return {model::Status::Error, "deepseek41: no model path"};
-        auto m = std::make_unique<DsModel>();
-        std::string err;
-        if (!m->load(req.paths.front(), err)) return {model::Status::Error, "deepseek41: " + err};
-        CacheFormat fmt = CacheFormat::Fp8;
-        if (!req.kv.empty() && !ctxp::cache_format(req.kv, fmt)) return {model::Status::Error, "deepseek41: --kv " + req.kv + ": fp8 or fp16"};
-        m->set_cache_format(fmt);
-        if (!m->resolve_context(req.max_context, err)) return {model::Status::Error, err};
-        m->set_diag_dump(req.diag_dump);
-        m->set_diag_tier(req.diag_tier_ram, req.diag_tier_vram);
-        m->set_tiers(req);
-        std::vector<int> peers = req.peer_devices;
-        if (peers.size() > (size_t) kMaxSecondCards) {
-            basalt::log::warn("basalt deepseek41", "%zu second cards given, %d hold experts; later cards idle", peers.size(),
-                              kMaxSecondCards);
-            peers.resize((size_t) kMaxSecondCards);
-        }
-        m->set_peer_devices(std::move(peers));
-        out = std::move(m);
-        return {};
-    }
+    std::unique_ptr<model::LoadedModel> make_model() const override { return std::make_unique<DsModel>(); }
 
     std::vector<model::SideTableSpec> side_tables(const model::ModelDesc&) const override {
         // the Engram table; its row geometry comes from the pack's meta.engram
@@ -88,7 +69,6 @@ public:
     PreTokenizer pretokenizer() const override { return {"joyai-llm", pretok_joyai}; }
 
     /// Second cards that hold experts, each a contiguous block of layers.
-    static constexpr int kMaxSecondCards = 4;
     int max_expert_cards() const override { return kMaxSecondCards; }
 
     const char* model_name() const override { return "DeepSeek-V4.1-Flash"; }

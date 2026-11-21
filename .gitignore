@@ -15,10 +15,6 @@ __pycache__/
 /.ccache/
 .DS_Store
 
-# Local working notes for the Windows port: scratch planning, not project docs.
-docs/WINDOWS-ROADMAP.md
-docs/REBASE-PLAN.md
-
 # --- local install artifacts (this checkout is a release install) ---
 models/
 data/
