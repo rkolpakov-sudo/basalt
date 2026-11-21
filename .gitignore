@@ -18,3 +18,15 @@ __pycache__/
 # Local working notes for the Windows port: scratch planning, not project docs.
 docs/WINDOWS-ROADMAP.md
 docs/REBASE-PLAN.md
+
+# --- local install artifacts (this checkout is a release install) ---
+models/
+data/
+bin/
+.venv/
+__pycache__/
+*.pyc
+*.log
+*.bak
+*.bak-*
+webui-patch/

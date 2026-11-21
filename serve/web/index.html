@@ -8,12 +8,21 @@
 <link rel="preload" href="fonts/geist-latin-wght.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="fonts/geist-mono-latin-wght.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="web/app.css">
+<link rel="stylesheet" href="web/extra.css">
 <script defer src="web/app.js"></script>
+<script defer src="web/extra.js"></script>
+<script defer src="web/chat.js"></script>
+<script defer src="web/settings.js"></script>
 </head>
 <body>
 
 <header class="bar">
   <div class="brand"><img src="web/mark.svg" alt=""><span class="wordmark">Basalt</span></div>
+  <nav class="mnav" aria-label="Views">
+    <button class="mtab on" data-view="monitor" type="button">Монитор</button>
+    <button class="mtab" data-view="chat" type="button">Чат</button>
+    <button class="mtab" data-view="settings" type="button">Настройки</button>
+  </nav>
   <div class="crumb">
     <span class="crumb-sep" id="crumb-sep" hidden>/</span>
     <span class="model" id="model"></span>
@@ -81,6 +90,312 @@
     <div class="logs" id="log" role="log" aria-live="off" tabindex="0"></div>
   </section>
 </main>
+
+<section class="chat card" id="view-chat" hidden>
+  <div class="hd"><b>Чат</b>
+    <select id="chat-pick" class="chat-pick" title="Какой моделью отвечать (переключение — до минуты)"></select>
+    <span id="chat-model"></span><span class="grow"></span><button class="mbtn" id="chat-new" type="button">Новый чат</button></div>
+  <div class="chat-hist" id="chat-hist"></div>
+  <div class="chat-ctl">
+    <label>temp<span id="v-temp"></span><input type="range" id="c-temp" min="0" max="2" step="0.05"></label>
+    <label>top_p<span id="v-topp"></span><input type="range" id="c-topp" min="0.05" max="1" step="0.05"></label>
+    <label>top_k<span id="v-topk"></span><input type="range" id="c-topk" min="1" max="128" step="1"></label>
+    <label>max_tokens<input type="number" id="c-maxt" min="1" max="131072" placeholder="auto"></label>
+    <label>reasoning
+      <select id="c-effort">
+        <option value="">шаблон</option>
+        <option value="none">none</option>
+        <option value="low">low</option>
+        <option value="medium">medium</option>
+        <option value="high">high</option>
+        <option value="xhigh">xhigh</option>
+        <option value="max">max</option>
+      </select>
+    </label>
+  </div>
+  <div class="chat-input">
+    <button class="mbtn" id="chat-attach" type="button" title="Прикрепить изображения или видео">＋файл</button>
+    <input type="file" id="chat-file" accept="image/png,image/jpeg,image/webp,image/gif,video/*" hidden multiple>
+    <span class="chat-thumbs" id="chat-thumbs"></span>
+    <textarea id="chat-text" rows="2" placeholder="Спросите что-нибудь…  (Enter — отправить, Shift+Enter — новая строка)"></textarea>
+    <button class="mbtn acc" id="chat-send" type="button">Отправить</button>
+    <button class="mbtn" id="chat-stop" type="button" hidden>Стоп</button>
+  </div>
+  <div class="chat-status" id="chat-status"></div>
+</section>
+
+<section class="set card" id="view-settings" hidden>
+  <div class="hd"><b>Настройки модели</b><span id="set-path"></span><span class="grow"></span><span id="set-eff"></span></div>
+  <div class="set-body">
+    <div class="set-live" id="set-live"></div>
+
+    <h3 class="set-h">Модель</h3>
+    <div class="set-models">
+      <label for="set-model">Какая модель обслуживает запросы</label>
+      <div class="set-modelrow">
+        <select id="set-model"></select>
+        <button class="mbtn acc" id="op-select" type="button">Переключить</button>
+        <button class="mbtn" id="op-load" type="button">Загрузить</button>
+        <button class="mbtn" id="op-unload" type="button">Выгрузить</button>
+      </div>
+      <p class="expl" id="set-model-note">Один сервер обслуживает несколько моделей: в каждый момент загружена
+        одна, переключение завершает текущую и поднимает выбранную (загрузка 30–40 с и больше — зависит от
+        размера). Список берётся из <code>basalt_config.json</code>. Поля ниже относятся к выбранной модели;
+        серые пометки — то, что она не поддерживает (движок отвечает на это без загрузки).</p>
+      <div class="set-caps" id="set-caps"></div>
+
+      <div class="fld">
+        <label for="s-model">model <small>файл модели, обязательное поле</small></label>
+        <input type="text" id="s-model" placeholder="models/Name.basalt" spellcheck="false">
+        <p class="expl">Путь к файлу <code>.basalt</code> относительно конфига (или абсолютный): в нём лежат веса,
+          токенизатор, шаблон чата, драфтер, vision-проектор и параметры сэмплинга по умолчанию. Имя файла —
+          единственное обязательное поле модели.</p>
+      </div>
+      <div class="fld">
+        <label for="s-alias">alias <small>имя модели в API</small></label>
+        <input type="text" id="s-alias" placeholder="как называть модель в запросах" spellcheck="false">
+        <p class="expl">Имя, которым модель называется в <code>GET /v1/models</code> и в поле <code>model</code>
+          запроса, — в том числе во вкладке «Чат». Если поле пустое, берётся имя из файла. Полезно, когда у двух
+          сборок одной модели должны быть разные имена.</p>
+      </div>
+      <div class="set-actions">
+        <button class="mbtn" id="op-add-model" type="button">Добавить модель</button>
+        <button class="mbtn" id="op-del-model" type="button">Удалить выбранную</button>
+      </div>
+      <p class="expl">Моделей в одном конфиге может быть сколько угодно — они обслуживаются по очереди (роутер
+        завершает одну и поднимает следующую). Две модели на одном GPU одновременно загрузить нельзя: под них
+        нужны разные GPU через <code>gpu</code>. Чтобы поставить Flash-Next рядом с Qwen3.8-27B, добавьте
+        запись, укажите её файл, а поля ниже (контекст, KV, <code>vram-elastic</code> и прочие) задайте уже
+        для неё — настройки движка хранятся в записи модели и не смешиваются.</p>
+    </div>
+
+    <h3 class="set-h">Обслуживание</h3>
+    <div class="set-actions">
+      <button class="mbtn" id="op-vram" type="button">Освободить VRAM (256 МиБ)</button>
+      <button class="mbtn" id="op-vram-back" type="button">Вернуть VRAM</button>
+      <button class="mbtn" id="op-restart" type="button">Перезапустить сервер</button>
+    </div>
+    <p class="set-hint">Выгрузка освобождает VRAM модели для других программ — следующий запрос загрузит её
+      снова. «Освободить VRAM» уменьшает резерв памяти драйвера между запросами, «Вернуть VRAM» — возвращает
+      стартовое значение из <code>vram-reserve-mib</code>. Плотная модель (как Qwen3.8-27B) отдаёт память только
+      выгрузкой; у моделей-«смесей экспертов» (Flash-Next) ту же роль играет <code>vram-elastic</code>.</p>
+
+    <h3 class="set-h">Параметры движка</h3>
+    <p class="set-note">Значения записываются в <code>basalt_config.json</code>; изменения контекста, KV, vision и порта
+      вступают в силу после «Сохранить и перезапустить». Перед каждой записью копия конфига сохраняется в
+      <code>basalt_config.json.bak</code>. Пустое поле = значение по умолчанию. Параметры генерации
+      (temperature, top_p и прочие) задаются во вкладке «Чат» и применяются к каждому запросу без перезапуска.</p>
+
+    <div class="set-grid">
+      <div class="fld">
+        <label for="s-ctx">max-context <small>длина контекста, токенов</small></label>
+        <input type="number" id="s-ctx" min="1024" step="1024">
+        <p class="expl">Сколько токенов сервер держит в памяти (промпт + история + ответ). Больше — длиннее
+          диалоги и документы, но KV-кэш растёт линейно и занимает VRAM/RAM. Загрузка модели тоже становится
+          дольше. Для Qwen3.8-27B обученная длина — 131 072; выше неё нужен RoPE-скейлинг, точность падает.</p>
+      </div>
+      <div class="fld">
+        <label for="s-kvr">kv-resident <small>ячеек KV в VRAM (0 — всё в VRAM)</small></label>
+        <input type="number" id="s-kvr" min="0" step="1024">
+        <p class="expl">KV-стриминг: N первых позиций каждого слоя внимания живут в VRAM, остальные — в
+          закреплённой RAM и читаются по шине на каждый токен. Позволяет держать 131k контекста на 24 ГБ
+          VRAM, но скорость декодирования падает тем сильнее, чем дальше позиция от N. 0 = выключено
+          (весь KV в VRAM — быстро, но контекст ограничен объёмом карты).</p>
+      </div>
+      <div class="fld">
+        <label for="s-kv">kv <small>тип KV-кэша</small></label>
+        <select id="s-kv">
+          <option value="fp16">fp16</option>
+          <option value="int8">int8</option>
+          <option value="q4_0">q4_0 (не с kv-resident)</option>
+          <option value="k8v4">k8v4 (не с kv-resident)</option>
+        </select>
+        <p class="expl">Точность хранения ключей/значений внимания. fp16 — исходная точность модели;
+          int8 сжимает вдвое (почти без потерь качества, рекомендуется); q4_0 и k8v4 сжимают сильнее,
+          чуть снижая точность, и несовместимы с kv-resident.</p>
+      </div>
+      <div class="fld">
+        <label for="s-vision">vision <small>ввод изображений</small></label>
+        <select id="s-vision">
+          <option value="off">off</option>
+          <option value="dynamic">dynamic</option>
+          <option value="cpu">cpu (медленно)</option>
+          <option value="0">gpu 0</option>
+        </select>
+        <p class="expl">Кодировщик изображений. off — только текст. dynamic — кодировщик внутри движка,
+          в простое VRAM не занимает, картинка кодируется за ~0.8 с. Номер GPU — отдельный процесс-сайдкар
+          навсегда занимает ~2.2 ГБ VRAM из кэша экспертов. cpu — без VRAM, но заметно медленнее.</p>
+      </div>
+      <div class="fld">
+        <label for="s-par">parallel <small>запросов одновременно (1–8)</small></label>
+        <input type="number" id="s-par" min="1" max="8" step="1">
+        <p class="expl">Сколько запросов сервер обслуживает параллельно. Память под контекст делится между
+          слотами: 4 слота по 131k требуют вчетверо больше KV — включайте <code>slot-full-context</code> и следите
+          за памятью. Отвечает быстрее в многопользовательской работе, но в одиночной оставьте 1: один слот
+          получает весь контекст.</p>
+      </div>
+      <div class="fld">
+        <label for="s-slotfull">slot-full-context <small>полный контекст каждому слоту</small></label>
+        <select id="s-slotfull">
+          <option value="">по умолчанию (выкл)</option>
+          <option value="true">включено</option>
+          <option value="false">выключено</option>
+        </select>
+        <p class="expl">Выключено: <code>max-context</code> делится между слотами <code>parallel</code> (4 слота
+          → по 32 768 токенов). Включено: каждый слот получает весь <code>max-context</code>, и KV-кэш занимает
+          в N раз больше памяти. Нужно, когда несколько клиентов работают с полным контекстом одновременно.</p>
+      </div>
+      <div class="fld">
+        <label for="s-vram">vram-reserve-mib <small>резерв VRAM, МиБ</small></label>
+        <input type="number" id="s-vram" min="256" step="64">
+        <p class="expl">Сколько VRAM сервер оставляет свободной для системы, графики и рабочего стола. Слишком
+          мало — драйвер начнёт выгружать память и всё замедлится; слишком много — кэш экспертов окажется
+          меньше и часть работы уйдёт на CPU. Минимум 256 МиБ.</p>
+      </div>
+      <div class="fld">
+        <label for="s-spec">spec <small>окна спекуляции (0 — выкл, до 16)</small></label>
+        <input type="number" id="s-spec" min="0" max="16" step="1">
+        <p class="expl">Спекулятивное декодирование: черновик предсказывает до N токенов вперёд, модель
+          проверяет их одним проходом. Ускоряет генерацию в 1.5–3 раза, выход побитово совпадает с обычным.
+          0 отключает. Больше окон — выше выигрыш, но и выше шанс впустую проверенных токенов.</p>
+      </div>
+      <div class="fld">
+        <label for="s-port">port <small>порт сервера</small></label>
+        <input type="number" id="s-port" min="1" max="65535">
+        <p class="expl">TCP-порт на 127.0.0.1. После смены обновите адреса у клиентов (OpenCode, Hermes)
+          и открывайте панель по новому адресу. Проверьте, что порт не занят другой программой.</p>
+      </div>
+      <div class="fld">
+        <label for="s-vramelastic">vram-elastic <small>только модели Flash-Next</small></label>
+        <select id="s-vramelastic">
+          <option value="">по умолчанию (выкл)</option>
+          <option value="true">включено</option>
+          <option value="false">выключено</option>
+        </select>
+        <p class="expl">Держит кэш экспертов сегментами, чтобы команда «Освободить VRAM» могла отдать память
+          другой программе и забрать её позже. <b>Работает только на Flash-Next</b> — у Qwen3.8-27B (плотная,
+          без экспертов) флаг игнорируется; на ней VRAM освобождают выгрузкой модели. Небольшой налог на
+          скорость декодирования, зато игры и рендер перестают падать из-за нехватки VRAM.</p>
+      </div>
+      <div class="fld">
+        <label for="s-ramres">ram-reserve-mib <small>резерв RAM, МиБ</small></label>
+        <input type="number" id="s-ramres" min="0" step="256">
+        <p class="expl">Сколько оперативной памяти оставить системе. Выше резерва движок размещает экспертов в
+          RAM; ниже — начинает парковать разговоры и может тормозить ожиданием памяти. 2048 МиБ — разумный
+          минимум, 0 полностью отключает защиту (может привести к свопу).</p>
+      </div>
+      <div class="fld">
+        <label for="s-cache">conversation-cache-mib <small>кэш разговоров в RAM, МиБ</small></label>
+        <input type="number" id="s-cache" min="0" step="256">
+        <p class="expl">Бюджет на «припаркованные» разговоры: сервер держит состояние недавних диалогов, чтобы
+          новый запрос не перечитывал весь промпт. Экономит секунды на длинных системных промптах. 0 —
+          выключено (каждый запрос читается с начала).</p>
+      </div>
+      <div class="fld">
+        <label for="s-cachedisk">conversation-cache-disk-mib <small>кэш разговоров на диске, МиБ</small></label>
+        <input type="number" id="s-cachedisk" min="0" step="1024">
+        <p class="expl">Дисковый бюджет того же кэша: разговоры переживают выгрузку модели и перезапуск сервера.
+          Полезно, если работаете с одним длинным документом или проектом. Каждый файл привязан к модели и
+          настройкам, при несовпадении удаляется.</p>
+      </div>
+      <div class="fld">
+        <label for="s-reason">reasoning-budget-tokens <small>лимит размышлений, токенов</small></label>
+        <input type="number" id="s-reason" min="0" step="512">
+        <p class="expl">Сколько токенов модель может потратить на «размышления» перед ответом, если запрос не
+          задаёт своё значение. Больше — глубже рассуждения на сложных задачах и медленнее ответ. 0 — отдать
+          решение шаблону модели. В веб-чате это можно задать на каждый запрос отдельно.</p>
+      </div>
+      <div class="fld">
+        <label for="s-answerroom">answer-room <small>токенов на ответ после размышлений</small></label>
+        <input type="number" id="s-answerroom" min="0" step="256" placeholder="auto">
+        <p class="expl">Резерв вывода под закрытие размышлений и сам ответ: auto подбирает его от длины
+          запроса. Мало — ответ может обрезаться сразу после размышлений; число — жёсткий резерв токенов.</p>
+      </div>
+      <div class="fld">
+        <label for="s-temp">temperature <small>по умолчанию для запросов</small></label>
+        <input type="number" id="s-temp" min="0" max="2" step="0.05">
+        <p class="expl">Случайность генерации по умолчанию для запросов, не задающих свою. 0 — детерминированно
+          (один и тот же ответ), 0.7–1.0 — живой текст, выше 1.2 — растёт риск бессвязности. В чате значение
+          можно менять на каждый запрос.</p>
+      </div>
+      <div class="fld">
+        <label for="s-topp">top-p <small>по умолчанию для запросов</small></label>
+        <input type="number" id="s-topp" min="0" max="1" step="0.05">
+        <p class="expl">Отбор из ядра вероятностей: модель выбирает из минимального набора токенов, чья
+          суммарная вероятность ≥ p. Ниже — предсказуемее и суше, выше — разнообразнее. 0.9–0.95 — обычный
+          диапазон.</p>
+      </div>
+      <div class="fld">
+        <label for="s-topk">top-k <small>по умолчанию для запросов</small></label>
+        <input type="number" id="s-topk" min="1" max="128" step="1">
+        <p class="expl">Жёсткий предел: выбор только из k самых вероятных токенов. Отсекает редкие «мусорные»
+          варианты, но при слишком малом k ответ становится шаблонным. 20 — сбалансированное значение.</p>
+      </div>
+      <div class="fld">
+        <label for="s-expertcache">expert-cache <small>авто или число</small></label>
+        <input type="text" id="s-expertcache" placeholder="auto">
+        <p class="expl">Сколько блоков экспертов держать резидентно в VRAM и считать на GPU. auto берёт всё,
+          что влезает после весов, сессии и резерва. Ручное число полезно, когда нужно осознанно сместить
+          баланс «скорость против запаса VRAM»: больше — быстрее, меньше — свободнее карта.</p>
+      </div>
+      <div class="fld">
+        <label for="s-resexperts">resident-experts <small>только модели Flash-Next</small></label>
+        <select id="s-resexperts">
+          <option value="">по умолчанию</option>
+          <option value="true">включено</option>
+          <option value="false">выключено</option>
+        </select>
+        <p class="expl">Держать экспертов, не поместившихся в VRAM, в закреплённой оперативной памяти
+          (читаются по шине), а не на диске. Это главный рычаг скорости для «смеси экспертов» на вашей машине:
+          с ним эксперты считает CPU из RAM, без него — читает с SSD по 4 КиБ, и генерация заметно замедляется.
+          Если RAM не хватает, движок сам переходит на файловый mapping. <b>Только Flash-Next.</b></p>
+      </div>
+      <div class="fld">
+        <label for="s-mmapexperts">mmap-experts <small>только модели Flash-Next</small></label>
+        <select id="s-mmapexperts">
+          <option value="">по умолчанию (выкл)</option>
+          <option value="true">включено</option>
+          <option value="false">выключено</option>
+        </select>
+        <p class="expl">Хранить RAM-копию экспертов не в самой памяти, а в отображённом файле: системе легче
+          освобождать такую память под другие программы, но чтения идут через файловый кэш и могут упираться
+          в диск. Включайте, когда RAM в обрез (у вас 31 ГБ) и нужно оставить запас системе.
+          <b>Только Flash-Next</b>, взаимоисключающе с обычным <code>resident-experts</code>.</p>
+      </div>
+      <div class="fld">
+        <label for="s-resbudget">resident-budget-gib <small>предел RAM под экспертов, ГиБ</small></label>
+        <input type="number" id="s-resbudget" min="0" step="1">
+        <p class="expl">Сколько оперативной памяти максимум отдать под экспертов в RAM (самые «горячие»
+          первыми). Пусто — движок берёт всю свободную RAM сверх резерва. Ограничьте, если рядом работает
+          что-то ещё и не хочется уходить в своп. <b>Только Flash-Next.</b></p>
+      </div>
+      <div class="fld">
+        <label for="s-prefillcpu">prefill-cpu-share <small>0–1, доля промпта на CPU</small></label>
+        <input type="number" id="s-prefillcpu" min="0" max="1" step="0.05">
+        <p class="expl">Какую часть экспертов при обработке промпта (длинного текста) считает CPU, а не GPU.
+          Выше — длинный промпт читается быстрее, если экспертов всё равно нет в VRAM; ниже — вся работа на
+          карте. Значение фиксировано, поэтому результат не «плавает» от запуска к запуску.
+          По умолчанию 0.6. <b>Только Flash-Next.</b></p>
+      </div>
+      <div class="fld">
+        <label for="s-adaptswaps">adapt-swaps <small>экспертов за раунд (0 — выкл)</small></label>
+        <input type="number" id="s-adaptswaps" min="0" step="8">
+        <p class="expl">Адаптивный ярус: сколько самых «востребованных» экспертов за один раунд переносится в
+          VRAM вместо самых редких. Больше — быстрее подстраивается под смену темы, но тратит шину на
+          перекладывание. 0 полностью отключает адаптацию. По умолчанию 96. <b>Только Flash-Next.</b></p>
+      </div>
+    </div>
+
+    <p class="set-warn" id="set-warn" hidden></p>
+    <div class="set-actions">
+      <button class="mbtn" id="set-reload" type="button">Перечитать</button>
+      <span class="grow"></span>
+      <button class="mbtn acc" id="set-save" type="button">Сохранить</button>
+      <button class="mbtn hot" id="set-save-restart" type="button">Сохранить и перезапустить</button>
+    </div>
+    <p class="set-status" id="set-status"></p>
+  </div>
+</section>
 
 </body>
 </html>

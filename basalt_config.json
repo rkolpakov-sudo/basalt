@@ -1,0 +1,29 @@
+{
+  "version": 2,
+  "models": [
+    {
+      "model": "models/Qwen3.8-27B-QUASAR-NVFP4.basalt",
+      "gpu": "0",
+      "max-context": 131072,
+      "kv": "int8",
+      "kv-resident": 32768,
+      "vision": "dynamic"
+    },
+    {
+      "model": "models/Qwen3.8-FN-UD-IQ2_XS.basalt",
+      "alias": "Flash-Next",
+      "gpu": "0",
+      "max-context": 131072,
+      "kv": "int8",
+      "vision": "dynamic",
+      "resident-experts": true
+    }
+  ],
+  "engine": {
+    "vram-reserve-mib": 700
+  },
+  "server": {
+    "host": "127.0.0.1",
+    "port": 8080
+  }
+}

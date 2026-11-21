@@ -1,0 +1,108 @@
+/* Chat and settings views added to the stock Basalt dashboard. Uses the stock CSS variables. */
+
+/* Top-bar view tabs */
+.mnav { display: flex; gap: 4px; }
+.mtab { padding: 7px 14px; border-radius: 6px; color: var(--fg-3); font-weight: 500; line-height: 1.4; }
+.mtab:hover { color: var(--fg); }
+.mtab.on { background: var(--surface); color: var(--fg); }
+
+/* In monitor mode the two extra views stay hidden (their own [hidden]); in chat/settings
+   mode the dashboard grid hides and the chosen card takes the page. */
+body.mode-chat .lay, body.mode-settings .lay { display: none; }
+body.mode-chat .chat, body.mode-settings .set { display: flex; }
+
+.chat, .set { display: none; flex-direction: column; gap: 0; margin: 0 28px 16px; height: calc(100dvh - 64px - 16px - 16px); min-height: 0; }
+.grow { flex: 1; }
+
+.mbtn { padding: 6px 14px; border-radius: 6px; background: var(--surface); border: 1px solid var(--line);
+        color: var(--fg-2); font-weight: 500; white-space: nowrap; }
+.mbtn:hover { color: var(--fg); border-color: var(--raised); }
+.mbtn.acc { background: var(--ember-deep); border-color: var(--ember-deep); color: #fff; }
+.mbtn.acc:hover { background: var(--ember); border-color: var(--ember); color: #fff; }
+.mbtn.hot { border-color: var(--ember); color: var(--ember-hot); }
+.mbtn[disabled] { opacity: .45; cursor: default; }
+
+/* Chat */
+.chat-hist { flex: 1 1 0; min-height: 0; overflow-y: auto; padding: 16px 20px; display: flex; flex-direction: column; gap: 12px; }
+.msg { max-width: 78%; padding: 9px 14px; border-radius: 10px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.msg.u { align-self: flex-end; background: var(--raised); }
+.msg.a { align-self: flex-start; background: var(--surface); }
+.msg .think { margin: 0 0 6px; color: var(--fg-3); font-size: 12.5px; }
+.msg .think summary { cursor: pointer; user-select: none; color: var(--fg-3); }
+.msg .think.open { display: block; }
+.msg pre { background: var(--basalt-950); border: 1px solid var(--line); border-radius: 6px;
+           padding: 8px 10px; overflow-x: auto; font: 12.5px/1.5 var(--font-mono); }
+.msg code { font: 12.5px/1.5 var(--font-mono); background: var(--basalt-950); padding: 1px 5px; border-radius: 4px; }
+.msg pre code { padding: 0; background: none; }
+.msg .img { display: block; max-width: 260px; max-height: 180px; border-radius: 6px; margin: 4px 0; }
+.msg.a .mono { display: block; margin-bottom: 4px; font-family: var(--font-mono); font-size: 12px; color: var(--fg-3); }
+
+.chat-ctl { display: flex; flex-wrap: wrap; gap: 10px 18px; padding: 10px 20px; border-top: 1px solid var(--line);
+            font: 12px/1 var(--font-mono); color: var(--fg-3); align-items: center; }
+.chat-ctl label { display: flex; align-items: center; gap: 7px; }
+.chat-ctl input[type="range"] { width: 90px; accent-color: var(--ember); }
+.chat-ctl input[type="number"], .chat-ctl select { width: 84px; background: var(--surface); border: 1px solid var(--line);
+            border-radius: 5px; padding: 4px 6px; color: var(--fg); }
+.chat-ctl label span { min-width: 38px; color: var(--fg-2); }
+
+.chat-input { display: flex; align-items: flex-end; gap: 8px; padding: 12px 20px; border-top: 1px solid var(--line); }
+.chat-thumbs { display: flex; gap: 6px; max-width: 30%; overflow-x: auto; }
+.chat-thumbs .thumb { height: 44px; border-radius: 5px; cursor: pointer; border: 1px solid var(--line); }
+.chat-thumbs .thumb.vid { background: #000; }
+.chat-body .img { max-width: 320px; max-height: 240px; border-radius: 6px; margin-bottom: 6px; display: block; }
+video.img { max-width: 320px; border-radius: 6px; }
+#chat-text { flex: 1; resize: none; background: var(--surface); border: 1px solid var(--line); border-radius: 8px;
+             padding: 9px 12px; color: var(--fg); max-height: 180px; }
+#chat-text:focus { outline: none; border-color: var(--raised); }
+.chat-status { min-height: 22px; padding: 0 20px 8px; font: 12px/1.5 var(--font-mono); color: var(--fg-3); }
+.chat-status.err { color: var(--err); }
+/* model picker in the chat header (shown only when the server holds several models) */
+.chat-pick { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px;
+             color: var(--fg); font: 12.5px var(--font-mono); max-width: 320px; }
+.chat-pick:focus { outline: none; border-color: var(--raised); }
+
+/* Settings */
+.set-body { flex: 1 1 0; min-height: 0; overflow-y: auto; padding: 16px 20px; }
+.set-h { margin: 22px 0 10px; font-size: 13px; font-weight: 600; color: var(--fg-2); letter-spacing: .02em; }
+.set-h:first-child { margin-top: 0; }
+.set-note { margin: 0 0 14px; color: var(--fg-3); font-size: 12.5px; }
+.set-note code { font: 12px var(--font-mono); color: var(--fg-2); }
+.set-hint { margin: 10px 0 0; color: var(--fg-3); font-size: 12px; line-height: 1.5; }
+.set-hint code { font: 11.5px var(--font-mono); color: var(--fg-2); }
+.set-live { display: flex; align-items: center; gap: 8px; padding: 10px 14px; margin-bottom: 4px;
+            background: var(--surface); border: 1px solid var(--line); border-radius: 8px; font-size: 13px; }
+.set-live b { font-weight: 600; }
+.dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.dot.on { background: var(--ember-hot); box-shadow: 0 0 8px var(--ember); }
+.dot.off { background: var(--basalt-500); }
+.set-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px 22px; }
+.fld { display: flex; flex-direction: column; gap: 6px; }
+.fld label { font: 13px/1.3 var(--font-mono); color: var(--fg-2); display: flex; flex-direction: column; gap: 2px; }
+.fld label small { font: 11px/1.3 var(--font-sans); color: var(--fg-3); }
+.fld input, .fld select { background: var(--surface); border: 1px solid var(--line); border-radius: 6px;
+               padding: 7px 10px; color: var(--fg); font: 13px var(--font-mono); }
+.fld input:focus, .fld select:focus { outline: none; border-color: var(--raised); }
+.fld .expl { margin: 0; font: 12px/1.55 var(--font-sans); color: var(--fg-3); }
+.fld .expl code { font: 11.5px var(--font-mono); color: var(--fg-2); }
+/* a setting the chosen model does not have: shown, but clearly not applicable */
+.fld.na { opacity: .45; }
+.fld.na input, .fld.na select { cursor: not-allowed; }
+.set-models { display: flex; flex-direction: column; gap: 8px; max-width: 860px; }
+.set-models > label { font: 13px var(--font-mono); color: var(--fg-2); }
+.set-modelrow { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.set-modelrow select { flex: 1 1 260px; min-width: 200px; background: var(--surface); border: 1px solid var(--line);
+                       border-radius: 6px; padding: 7px 10px; color: var(--fg); font: 13px var(--font-mono); }
+.set-caps { font: 12px/1.6 var(--font-sans); color: var(--fg-3); }
+.set-caps code { font: 11.5px var(--font-mono); color: var(--fg-2); }
+.set-caps b { color: var(--fg-2); }
+.set-models .fld input[type="text"] { max-width: 560px; }
+.set-warn { margin: 12px 0 0; color: var(--warn); font-size: 12.5px; }
+.set-actions { display: flex; gap: 8px; align-items: center; margin-top: 18px; }
+.set-status { min-height: 20px; margin: 10px 0 0; font: 12px/1.5 var(--font-mono); color: var(--fg-3); white-space: pre-wrap; }
+.set-status.err { color: var(--err); }
+.set-status.ok { color: var(--ember-hot); }
+
+@media (max-width: 900px) {
+  .chat, .set { margin: 0 16px 16px; height: calc(100dvh - 72px - 32px); }
+  .msg { max-width: 92%; }
+}

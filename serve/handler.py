@@ -16,6 +16,7 @@ from urllib.parse import parse_qs, urlsplit
 from serve.api import responses as responses_api
 from serve.api.responses import error_body as responses_error_body
 from serve import ROOT
+from serve.api import config_api
 from serve.api.anthropic import anthropic_collect, anthropic_events
 from serve.api.documents import sources as document_sources
 from serve.engine.errors import ClientGone, EngineDied, EngineError, EngineStarting, EngineStuck, GpuBusy, ModelBusy
@@ -387,6 +388,12 @@ def make_handler(target: Service | Router):
             elif path == "/v1/status":
                 if self._authorized():
                     self._json(200, {**router.shown().v1_status(), "models": router.models(), "swap": router.swap_status()})
+            elif path == "/api/config":
+                if self._authorized():
+                    config_api.handle_get(self, svc, router)
+            elif path == "/api/model/caps":
+                if self._authorized():
+                    config_api.handle_caps(self, svc, router)
             else:
                 self._json(404, {"error": {"message": "not found"}})
 
@@ -421,6 +428,18 @@ def make_handler(target: Service | Router):
                     pass
                 finally:
                     self._end_request()
+                return
+            if path == "/api/config":                        # save the config file (validated)
+                if self._own_page("the config file can be changed"):
+                    config_api.handle_post(self, svc, router)
+                return
+            if path == "/api/vram":                          # resize the VRAM reserve between requests
+                if self._own_page("the VRAM reserve can be changed"):
+                    config_api.handle_vram(self, svc, router)
+                return
+            if path == "/api/restart":                       # stop and start again through the launcher scripts
+                if self._own_page("the server can be restarted"):
+                    config_api.handle_restart(self, svc, router)
                 return
             try:
                 req = json.loads(self._body() or b"{}")
