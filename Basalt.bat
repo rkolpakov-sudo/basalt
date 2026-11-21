@@ -8,7 +8,7 @@ rem   Basalt.bat status       say whether it runs
 title Basalt
 cd /d "%~dp0"
 
-set "CTL=C:\basalt-v0.4.1-windows-x64\serve_ctl.ps1"
+set "CTL=%~dp0serve_ctl.ps1"
 set "GIVEN=%~1"
 
 if "%GIVEN%"=="" (
