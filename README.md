@@ -1,3 +1,11 @@
+<!-- local fork: keep this block at the very top when merging upstream -->
+> ## This fork installs differently
+>
+> This is a fork of [`jesdga95/basalt`](https://github.com/jesdga95/basalt) carrying a reworked web UI and local serving scripts.
+> **Install the `local` branch by following [INSTALL-LOCAL.md](INSTALL-LOCAL.md).** The rest of this file describes the upstream
+> project: neither its release archives nor its `cmake` build applies to this fork, and its example `basalt_config.json` is not the
+> tuned one in this repo. `bin/` and `models/` are not in git and have to be copied in by hand.
+
 <p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/basalt-lockup-dark.png"><img src="assets/basalt-lockup-light.png" alt="Basalt" width="480"></picture></p>
 
 Basalt is a local inference engine for large language models: **Qwen3.8-Flash-Next**, **DeepSeek-V4.1-Flash** and **Qwen3.8-27B**. It runs
