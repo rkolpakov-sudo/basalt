@@ -454,6 +454,7 @@
       });
     }
     window.basaltSettings = { reload };
+    window.basaltViews?.on("settings", reload);
     reload();                                    // preload so the first "Save" cannot race an empty form
   }
 

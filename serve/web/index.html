@@ -16,6 +16,7 @@
 <script defer src="web/extra.js"></script>
 <script defer src="web/chat.js"></script>
 <script defer src="web/settings.js"></script>
+<script defer src="web/maintenance.js"></script>
 <!-- /local-ui:head -->
 </head>
 <body>
@@ -41,6 +42,7 @@
   <button class="mtab on" data-view="monitor" type="button">Монитор</button>
   <button class="mtab" data-view="chat" type="button">Чат</button>
   <button class="mtab" data-view="settings" type="button">Настройки</button>
+  <button class="mtab" data-view="maint" type="button">Обслуживание</button>
 </nav>
 <!-- /local-ui:nav -->
 
@@ -399,6 +401,35 @@
       <button class="mbtn hot" id="set-save-restart" type="button">Сохранить и перезапустить</button>
     </div>
     <p class="set-status" id="set-status"></p>
+  </div>
+</section>
+
+<section class="maint card" id="view-maint" hidden>
+  <div class="hd"><b>Обслуживание</b><span id="maint-head"></span></div>
+  <div class="maint-body">
+    <h3 class="set-h">Эта сборка</h3>
+    <div class="maint-grid" id="maint-version"></div>
+    <p class="expl">Сборка — это ваш клон: <code>local-…</code> тег наверху, под ним релиз оригинального
+      Basalt, на котором он стоит. «Движок» — версия <code>bin\basalt.exe</code>; пока модель не
+      загружена, её показать нечем. Если дерево «грязное», обновление не запустится: правки нужно
+      сначала закоммитить (тогда они перенесутся на новую версию) или отменить.</p>
+
+    <div class="maint-actions">
+      <button class="mbtn" id="maint-check" type="button">Проверить обновления</button>
+      <button class="mbtn acc" id="maint-run" type="button" disabled>Обновить</button>
+    </div>
+    <p class="set-warn" id="maint-warn" hidden></p>
+    <p class="set-status" id="maint-status"></p>
+
+    <div class="maint-logbar">
+      <h3 class="set-h">Журнал обновления</h3>
+      <button class="mbtn" id="maint-log-clear" type="button">Очистить</button>
+    </div>
+    <pre class="maint-log" id="maint-log" aria-live="polite"></pre>
+    <p class="expl">Обновление сливает новый релиз в вашу ветку, пересобирает интерфейс и меняет
+      <code>bin\*.exe</code>; старая папка <code>bin\</code> сохраняется рядом (<code>bin.prev\</code>).
+      Сервер перезапускается, а если новая сборка не ответит — всё возвращается обратно. Файл журнала —
+      <code>logs\update.log</code>; его же видно в консоли, откуда запущен сервер.</p>
   </div>
 </section>
 <!-- /local-ui:views -->

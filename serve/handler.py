@@ -427,7 +427,7 @@ def make_handler(target: Service | Router):
             elif path == "/api/model/caps":
                 if self._authorized():
                     config_api.handle_caps(self, svc, router)
-            elif path == "/api/local/state":                 # this build and what the local layer remembers
+            elif path.startswith("/api/local/"):             # this build, and updating it
                 if self._authorized():
                     local_api.handle_get(self, svc, router)
             else:
@@ -476,6 +476,10 @@ def make_handler(target: Service | Router):
             if path == "/api/restart":                       # stop and start again through the launcher scripts
                 if self._own_page("the server can be restarted"):
                     config_api.handle_restart(self, svc, router)
+                return
+            if path.startswith("/api/local/"):               # this layer's own actions (the update)
+                if self._own_page("the install can be updated"):
+                    local_api.handle_post(self, svc, router)
                 return
             try:
                 req = json.loads(self._body() or b"{}")

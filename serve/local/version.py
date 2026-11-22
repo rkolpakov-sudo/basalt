@@ -27,18 +27,27 @@ _cache_at = 0.0
 _lock = threading.Lock()
 
 
-def _git(*args: str) -> str | None:
-    """One git command in the install root; None when git is missing or the command fails."""
+def run(*args: str, timeout: float = GIT_TIMEOUT_S) -> tuple[int, str, str] | None:
+    """(returncode, stdout, stderr) of one git command in the install root; None if git cannot start.
+
+    Callers that need the exit code -- a fetch, an ancestor test -- use this; callers that only want the
+    output use _git below."""
     try:
-        run = subprocess.run(["git", "-C", str(ROOT), *args], capture_output=True, text=True,
-                             encoding="utf-8", errors="replace", timeout=GIT_TIMEOUT_S,
-                             stdin=subprocess.DEVNULL,
-                             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        p = subprocess.run(["git", "-C", str(ROOT), *args], capture_output=True, text=True,
+                           encoding="utf-8", errors="replace", timeout=timeout,
+                           stdin=subprocess.DEVNULL,
+                           creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
     except (OSError, subprocess.SubprocessError):
         return None
-    if run.returncode != 0:
+    return p.returncode, p.stdout or "", p.stderr or ""
+
+
+def _git(*args: str, timeout: float = GIT_TIMEOUT_S) -> str | None:
+    """The output of a git command that must succeed; None when git is missing or it fails."""
+    r = run(*args, timeout=timeout)
+    if r is None or r[0] != 0:
         return None
-    return (run.stdout or "").strip() or None
+    return r[1].strip() or None
 
 
 def _tag(pattern: str) -> str | None:
