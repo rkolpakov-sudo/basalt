@@ -16,6 +16,7 @@
 <script defer src="web/extra.js"></script>
 <script defer src="web/chat.js"></script>
 <script defer src="web/settings.js"></script>
+<script defer src="web/models.js"></script>
 <script defer src="web/maintenance.js"></script>
 <!-- /local-ui:head -->
 </head>
@@ -42,6 +43,7 @@
   <button class="mtab on" data-view="monitor" type="button">Монитор</button>
   <button class="mtab" data-view="chat" type="button">Чат</button>
   <button class="mtab" data-view="settings" type="button">Настройки</button>
+  <button class="mtab" data-view="models" type="button">Модели</button>
   <button class="mtab" data-view="maint" type="button">Обслуживание</button>
 </nav>
 <!-- /local-ui:nav -->
@@ -401,6 +403,41 @@
       <button class="mbtn hot" id="set-save-restart" type="button">Сохранить и перезапустить</button>
     </div>
     <p class="set-status" id="set-status"></p>
+  </div>
+</section>
+
+<section class="maint card" id="view-models" hidden>
+  <div class="hd"><b>Модели</b></div>
+  <div class="maint-body">
+    <h3 class="set-h">На этом компьютере <span class="mdl-dim" id="mdl-disk"></span></h3>
+    <p class="expl">Файл <code>.basalt</code> в папке <code>models\</code> — это и есть модель: веса,
+      токенизатор, шаблон чата и, у некоторых, драфтер с vision-проектором. Одного файла серверу мало:
+      пока модели нет в <code>basalt_config.json</code>, её нельзя загрузить и переключить. Ниже — что
+      лежит на диске и знает ли про него конфиг.</p>
+    <div id="mdl-installed"></div>
+
+    <div class="maint-logbar">
+      <h3 class="set-h">Загрузка <span class="mdl-dim" id="mdl-run-file"></span></h3>
+      <button class="mbtn" id="mdl-log-clear" type="button">Очистить</button>
+    </div>
+    <div class="mdl-run" id="mdl-run" hidden>
+      <div class="mdl-bar" id="mdl-bar"><i id="mdl-bar-fill"></i></div>
+      <p class="set-status" id="mdl-bar-text"></p>
+    </div>
+    <p class="set-status" id="mdl-status"></p>
+    <p class="set-warn" id="mdl-warn" hidden></p>
+    <div class="maint-actions"><button class="mbtn hot" id="mdl-restart" type="button" hidden>Перезапустить сервер</button></div>
+    <pre class="maint-log" id="mdl-log" aria-live="polite"></pre>
+
+    <div class="maint-logbar">
+      <h3 class="set-h">Что можно скачать</h3>
+      <button class="mbtn" id="mdl-refresh" type="button">Обновить списки</button>
+    </div>
+    <p class="expl">Список — это паки на Hugging Face; его размеры и имена читаются живьём, так что новый
+      пак или переименование появятся без обновления сборки. Скачивание идёт в фоновом потоке сервера и
+      продолжается, пока сервер работает; прерванное продолжается с того же места. Файл журнала —
+      <code>logs\download.log</code>.</p>
+    <div id="mdl-catalog"></div>
   </div>
 </section>
 

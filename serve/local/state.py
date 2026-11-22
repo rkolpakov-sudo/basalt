@@ -24,6 +24,7 @@ STATE_NAME = "local_state.json"
 # it is (see load), so downgrading does not silently drop what a newer page wrote.
 DEFAULTS: dict = {
     "update": {},        # the last update check and how the last run ended
+    "catalog": {},       # the last file listing of each pack repo, with its sizes
     "downloads": {},     # model downloads by repo id: what was fetched and where it went
     "prefs": {},         # page preferences worth keeping server-side, not just in this browser
 }

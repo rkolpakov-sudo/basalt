@@ -8,11 +8,12 @@
 .mtab:hover { color: var(--fg); }
 .mtab.on { background: var(--surface); color: var(--fg); }
 
-/* In monitor mode the extra views stay hidden (their own [hidden]); in chat/settings/maintenance
-   mode the dashboard and its log ticker hide and the chosen card takes the rest of the page. */
-body.mode-chat main, body.mode-settings main, body.mode-maint main,
-body.mode-chat .tail, body.mode-settings .tail, body.mode-maint .tail { display: none; }
-body.mode-chat .chat, body.mode-settings .set, body.mode-maint .maint { display: flex; }
+/* In monitor mode the extra views stay hidden (their own [hidden]); in the other modes the dashboard
+   and its log ticker hide and the chosen card takes the rest of the page.  Every tab of its own needs
+   a line here: a mode nothing styles leaves the dashboard showing through. */
+body.mode-chat main, body.mode-settings main, body.mode-models main, body.mode-maint main,
+body.mode-chat .tail, body.mode-settings .tail, body.mode-models .tail, body.mode-maint .tail { display: none; }
+body.mode-chat .chat, body.mode-settings .set, body.mode-models .maint, body.mode-maint .maint { display: flex; }
 
 .chat, .set, .maint { display: none; flex: 1 1 auto; flex-direction: column; gap: 0; margin: 0 28px 16px; min-height: 0; }
 
@@ -129,6 +130,33 @@ video.img { max-width: 320px; border-radius: 6px; }
   padding: 12px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface);
   font: 11.5px/1.55 var(--font-mono); color: var(--fg-2); white-space: pre-wrap; overflow-wrap: anywhere; }
 .maint-log:empty::before { content: "лог появится здесь"; color: var(--fg-3); }
+
+/* Models tab.  A row is one file: name, size, whether the config knows it, and the action that is
+   missing.  A repo is a <details>, so the list of packs nobody is downloading stays one line high. */
+.mdl-dim { color: var(--fg-3); font: 11.5px var(--font-mono); }
+.mdl-row { display: grid; grid-template-columns: 1fr max-content max-content max-content;
+  gap: 6px 14px; align-items: center; padding: 7px 0; border-bottom: 1px solid var(--line); }
+.mdl-row:last-child { border-bottom: 0; }
+.mdl-file { font: 12.5px var(--font-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mdl-pick .mdl-file { color: var(--fg-2); }
+.mdl-size { font: 12px var(--font-mono); color: var(--fg-2); }
+.mdl-badge { font: 11.5px var(--font-mono); }
+.mdl-ok { color: var(--ember-hot); }
+.mdl-off { color: var(--warn); }
+.mdl-act { display: flex; gap: 6px; justify-content: flex-end; }
+.mbtn.sm { padding: 4px 10px; font-size: 12px; }
+.mdl-repo { margin-top: 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+.mdl-repo > summary { display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: baseline; cursor: pointer;
+  padding: 10px 14px; list-style: none; }
+.mdl-repo > summary::-webkit-details-marker { display: none; }
+.mdl-repo > summary::before { content: "\25B8"; color: var(--fg-3); }
+.mdl-repo[open] > summary::before { content: "\25BE"; }
+.mdl-repo > summary b { color: var(--fg); font-size: 13px; }
+.mdl-repo-body { padding: 0 14px 12px; }
+.mdl-repo-body .expl { margin: 8px 0 0; }
+.mdl-run { margin-top: 10px; }
+.mdl-bar { height: 8px; border-radius: 4px; background: var(--raised); overflow: hidden; }
+.mdl-bar i { display: block; height: 100%; width: 0; background: var(--ember); transition: width .3s; }
 
 @media (max-width: 900px) {
   .chat, .set, .maint { margin: 0 16px 16px; }

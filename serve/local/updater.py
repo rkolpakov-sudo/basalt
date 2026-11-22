@@ -26,7 +26,7 @@ import time
 from pathlib import Path
 
 from serve import ROOT
-from serve.local import state, version
+from serve.local import logs, state, version
 
 REMOTE = "upstream"
 REMOTE_URL = "https://github.com/jesdga95/basalt"
@@ -193,21 +193,9 @@ def status() -> dict:
 
 def tail(since: int = 0) -> dict:
     """The log from byte `since`, cut at a line boundary so a chunk never splits a character."""
-    try:
-        data = _at(LOG).read_bytes()
-    except OSError:
-        data = b""
-    try:
-        start = max(0, min(int(since or 0), len(data)))
-    except (TypeError, ValueError):
-        start = 0
-    chunk = data[start:]
-    cut = chunk.rfind(b"\n")
-    if cut < 0:                                  # a half-written line: hand nothing over, ask again
-        text, nxt = "", start
-    else:
-        text, nxt = chunk[:cut + 1].decode("utf-8", "replace"), start + cut + 1
-    return {"text": text.lstrip("\ufeff"), "next": nxt, "size": len(data), "running": status()["running"]}
+    out = logs.tail(_at(LOG), since)
+    out["running"] = status()["running"]
+    return out
 
 
 def start(target: str | None = None) -> dict:

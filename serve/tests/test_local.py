@@ -121,7 +121,8 @@ class StateFile(unittest.TestCase):
     def test_save_replaces_the_whole_file(self):
         state.merge(prefs={"view": "chat"})
         state.save({"update": {"upstream": "v0.6.0"}})
-        self.assertEqual(state.load(), {"update": {"upstream": "v0.6.0"}, "downloads": {}, "prefs": {}})
+        self.assertEqual(state.load(), {"update": {"upstream": "v0.6.0"}, "catalog": {},
+                                        "downloads": {}, "prefs": {}})
 
 
 class StateEndpoint(unittest.TestCase):
