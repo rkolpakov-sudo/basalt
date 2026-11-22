@@ -1,17 +1,20 @@
 /* Chat and settings views added to the stock Basalt dashboard. Uses the stock CSS variables. */
 
-/* Top-bar view tabs */
-.mnav { display: flex; gap: 4px; }
+/* View tabs: a strip of their own under the top bar.  Since 0.5.5 the page body is a flex
+   column (header, main, footer), so the strip and the views below are its flex children. */
+.mnav { display: flex; flex: none; gap: 4px; align-items: center; padding: 6px var(--gut, 28px);
+        border-bottom: 1px solid var(--line); }
 .mtab { padding: 7px 14px; border-radius: 6px; color: var(--fg-3); font-weight: 500; line-height: 1.4; }
 .mtab:hover { color: var(--fg); }
 .mtab.on { background: var(--surface); color: var(--fg); }
 
 /* In monitor mode the two extra views stay hidden (their own [hidden]); in chat/settings
-   mode the dashboard grid hides and the chosen card takes the page. */
-body.mode-chat .lay, body.mode-settings .lay { display: none; }
+   mode the dashboard and its log ticker hide and the chosen card takes the rest of the page. */
+body.mode-chat main, body.mode-settings main,
+body.mode-chat .tail, body.mode-settings .tail { display: none; }
 body.mode-chat .chat, body.mode-settings .set { display: flex; }
 
-.chat, .set { display: none; flex-direction: column; gap: 0; margin: 0 28px 16px; height: calc(100dvh - 64px - 16px - 16px); min-height: 0; }
+.chat, .set { display: none; flex: 1 1 auto; flex-direction: column; gap: 0; margin: 0 28px 16px; min-height: 0; }
 .grow { flex: 1; }
 
 .mbtn { padding: 6px 14px; border-radius: 6px; background: var(--surface); border: 1px solid var(--line);
