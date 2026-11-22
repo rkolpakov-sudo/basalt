@@ -1,10 +1,12 @@
 # Установка этой сборки на другой компьютер
 
-Этот форк — официальный Basalt **v0.5.0** плюс локальные доработки веб-интерфейса.
+Этот форк — официальный Basalt **v0.5.5** плюс локальные доработки веб-интерфейса.
 Ветка по умолчанию `local` и есть рабочая сборка: склонировал — уже на ней.
 
 Ничего из upstream не удалено и не переписано, поэтому обновления тянутся обычным
-`git merge` (см. [Обновление](#обновление-с-upstream)).
+`git merge` (см. [Обновление](#обновление-с-upstream)). Локальные вкладки «Чат» и
+«Настройки» живут в отдельном фрагменте `serve/web/local/patch.html` и собираются в
+`index.html` скриптом — поэтому переверстка upstream больше не даёт ручного конфликта.
 
 ## Что в git, а что нет
 
@@ -43,8 +45,11 @@ cd C:\basalt-local
 
 ```powershell
 git sparse-checkout init --cone
-git sparse-checkout set serve tools docs
+git sparse-checkout set serve tools docs data
 ```
+
+`data` нужен: там профили экспертов (`data/profiles/*.prof`), включая
+`inkling2-24x128.prof` для Inkling 2 Mini, и фикстуры `basalt-bench`.
 
 Это необязательно: лишние `src/`, `include/`, `CMakeLists.txt` просто лежат на диске.
 
@@ -68,7 +73,7 @@ robocopy \\ИМЯ_СТАРОГО_ПК\C$\basalt-v0.4.1-windows-x64\bin .\bin /E
 **Вариант B — собрать из официальных источников.**
 
 1. `.exe` — из архива релиза
-   [v0.5.0 windows-x64](https://github.com/jesdga95/basalt/releases/tag/v0.5.0)
+   [v0.5.5 windows-x64](https://github.com/jesdga95/basalt/releases/tag/v0.5.5)
    (в архиве лежат только `.exe`, библиотек там нет).
 2. CUDA 13 runtime — из установщика CUDA 13.0 (лягут в `PATH`) либо скопировать
    четыре `*_13.dll` из `bin/` рабочей машины.
@@ -220,11 +225,21 @@ git fetch upstream --tags
 git merge v0.6.0
 ```
 
-Единственный ожидаемый конфликт — `.gitignore` (локальный блок правил для артефактов
-установки против upstream-версии): оставить оба блока, затем `git add .gitignore`.
+Конфликтов в коде нет: проверено на реальном merge v0.5.5 (177 коммитов, 285 файлов) —
+`serve/handler.py`, `README.md` и `.gitignore` сливаются сами.
 
-`serve/handler.py` git сливает сам — проверено на реальном merge v0.5.0: 285 файлов
-обновились автоматически, конфликтов в коде нет.
+Единственный файл, который upstream переписывает целиком, — `serve/web/index.html`.
+Если git всё же сообщит о конфликте в нём (например, upstream переделает вёрстку):
+
+```powershell
+git checkout --theirs -- serve/web/index.html   # взять страницу upstream
+python serve/web/local/build_index.py           # вставить наши вкладки по трём якорям
+git add serve/web/index.html
+git merge --continue
+```
+
+Скрипт ищет якоря `</head>`, `</header>`, `</body>`; если upstream уберёт один из них,
+он остановится с внятной ошибкой, а не соберёт битую страницу.
 
 **Обязательный второй шаг:** `bin/` не в git, а `serve/` и движок должны быть одной
 версии. Заменить `.exe` в `bin/` из архива нового релиза (DLL не трогать), затем
@@ -233,17 +248,19 @@ git merge v0.6.0
 ## Откат
 
 ```powershell
-git reset --hard local-0.5.0    # или local-0.4.1
+git reset --hard local-0.5.5    # или local-0.5.0, local-0.4.1
 ```
 
-Метки `local-0.4.1` и `local-0.5.0` — зафиксированные рабочие состояния. Откат кода
-требует и соответствующего `bin/` из архива той же версии.
+Метки `local-0.4.1`, `local-0.5.0` и `local-0.5.5` — зафиксированные рабочие состояния.
+Откат кода требует и соответствующего `bin/` из архива той же версии.
 
 ## Что изменено относительно upstream
 
 | Файл | Что |
 |---|---|
-| `serve/web/index.html` | изменён: вкладки «Монитор» и «Настройки», подключение своих скриптов |
+| `serve/web/index.html` | собирается: upstream-страница плюс фрагмент вкладок (см. ниже) |
+| `serve/web/local/patch.html` | добавлен: вкладки «Монитор/Чат/Настройки» и виды «Чат», «Настройки» |
+| `serve/web/local/build_index.py` | добавлен: сборка `index.html` из upstream-страницы и фрагмента |
 | `serve/handler.py` | изменён: маршруты `/api/config` (GET и POST), `/api/model/caps`, `/api/vram`, `/api/restart` |
 | `serve/api/config_api.py` | добавлен: чтение/запись конфига, runtime-статус |
 | `serve/web/chat.js` | добавлен: чат с потоковой выдачей, reasoning, tool-calls |

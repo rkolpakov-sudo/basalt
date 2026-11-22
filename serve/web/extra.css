@@ -15,6 +15,13 @@ body.mode-chat .tail, body.mode-settings .tail { display: none; }
 body.mode-chat .chat, body.mode-settings .set { display: flex; }
 
 .chat, .set { display: none; flex: 1 1 auto; flex-direction: column; gap: 0; margin: 0 28px 16px; min-height: 0; }
+
+/* Card headers: 0.5.5 dropped the stock .hd rule these two views used to inherit. */
+.chat > .hd, .set > .hd { display: flex; justify-content: space-between; align-items: baseline; gap: 12px;
+  padding: 14px 20px; font-size: 13px; color: var(--fg-3); border-bottom: 1px solid var(--line); flex: none; }
+.chat > .hd b, .set > .hd b { color: var(--fg); font-weight: 600; font-size: 14px; }
+#chat-model { font: 12.5px var(--font-mono); color: var(--fg-3); }
+#set-path, #set-eff { font: 12px var(--font-mono); color: var(--fg-3); }
 .grow { flex: 1; }
 
 .mbtn { padding: 6px 14px; border-radius: 6px; background: var(--surface); border: 1px solid var(--line);
