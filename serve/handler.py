@@ -18,6 +18,7 @@ from serve.api import responses as responses_api
 from serve.api.responses import error_body as responses_error_body
 from serve import ROOT
 from serve.api import config_api
+from serve.local import api as local_api
 from serve.api.anthropic import anthropic_collect, anthropic_events
 from serve.api.documents import sources as document_sources
 from serve.engine.errors import ClientGone, EngineDied, EngineError, EngineStarting, EngineStuck, GpuBusy, ModelBusy
@@ -426,6 +427,9 @@ def make_handler(target: Service | Router):
             elif path == "/api/model/caps":
                 if self._authorized():
                     config_api.handle_caps(self, svc, router)
+            elif path == "/api/local/state":                 # this build and what the local layer remembers
+                if self._authorized():
+                    local_api.handle_get(self, svc, router)
             else:
                 self._json(404, {"error": {"message": "not found"}})
 

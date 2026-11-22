@@ -17,7 +17,6 @@ __pycache__/
 
 # --- local install artifacts (this checkout is a release install) ---
 models/
-data/
 bin/
 .venv/
 __pycache__/
@@ -25,4 +24,6 @@ __pycache__/
 *.log
 *.bak
 *.bak-*
+local_state.json
+local_state.json.tmp
 webui-patch/
