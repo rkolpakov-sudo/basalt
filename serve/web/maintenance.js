@@ -5,19 +5,29 @@
    because the server cannot replace its own .exe while it runs.  This page therefore only watches: it
    starts the run, tails logs/update.log by byte offset, and survives the restart in the middle of it.
    The log is a file on disk, so the offset stays valid across the restart; it is reset only when the
-   file gets shorter than what has already been shown (the next run truncates it). */
+   file gets shorter than what has already been shown (the next run truncates it).
+
+   One place decides what to show: sync() reads the run's status once, and the log is re-read from the
+   start only for a result that has not been shown yet -- switching to the tab a second time must not
+   paste the same run twice. */
 (() => {
   const $ = s => document.querySelector(s);
   const apiKey = () => sessionStorage.getItem("basalt.key") || "";
   const auth = () => ({ "Content-Type": "application/json", ...(apiKey() ? { Authorization: `Bearer ${apiKey()}` } : {}) });
   const LOG_LIMIT = 200 * 1024;      // characters kept in the pane; the file itself is not touched
+  const POLL_MS = 1000;              // while a run is going
+  const READS_MAX = 200;             // tail round trips to drain the log in one pass
 
   let next = 0;                      // byte offset into the update log
-  let timer = null;                  // poll timer, live only while a run is going
+  let watching = false;              // a poll loop is running
+  let timer = null;
   let build = null;                  // the version block from GET /api/local/state
   let check = null;                  // the last answer from GET /api/local/update/check
-  let restarts = 0;                  // how many times the server has been away mid-run
+  let shown = null;                  // the run whose log is in the pane ("", or its finished_at)
+  let lastResult = null;             // how the last run ended, or null when none has finished
 
+  /* The status line carries two kinds of news -- what a check found, and how the last run ended -- and
+     the run outranks the check: "done: v0.6.0" should not be erased by "no updates available". */
   const status = (msg, cls = "") => {
     const s = $("#maint-status");
     s.textContent = msg || "";
@@ -29,7 +39,7 @@
     w.hidden = !msg;
   };
 
-  /* --- the version block ------------------------------------------------ */
+  /* --- the version block ------------------------------------------------- */
   const row = (k, v, cls = "") => `<div class="k">${k}</div><div class="v ${cls}">${v}</div>`;
 
   function renderVersion() {
@@ -51,18 +61,14 @@
     $("#maint-head").textContent = v.local && v.engine ? `${v.local} · движок ${v.engine}` : (v.local || "");
   }
 
-  /* --- what a check found ----------------------------------------------- */
+  /* --- what a check found ------------------------------------------------ */
   function renderCheck() {
     const run = $("#maint-run");
-    if (!check) {
-      run.disabled = true;
-      run.textContent = "Обновить";
-      return;
-    }
+    run.disabled = true;
+    run.textContent = "Обновить";
+    if (!check) return;
     if (check.error) {
       status(check.error, "err");
-      run.disabled = true;
-      run.textContent = "Обновить";
       return;
     }
     if (check.available) {
@@ -72,14 +78,14 @@
       run.disabled = Boolean(check.dirty);
       warn(check.dirty ? "В дереве есть незакоммиченные правки: сначала закоммитьте или отмените их." : "");
     } else {
-      status(`Обновлений нет: ${check.latest || check.current || "?"} — последний релиз.`, "");
-      run.textContent = "Обновить";
-      run.disabled = true;
+      // the quiet answer stays out of the way of a finished run: how it ended says more than "no updates"
+      if (lastResult) renderResult(lastResult);
+      else status(`Обновлений нет: ${check.latest || check.current || "?"} — последний релиз.`, "");
       warn("");
     }
   }
 
-  /* --- talking to the server -------------------------------------------- */
+  /* --- talking to the server --------------------------------------------- */
   async function loadState() {
     try {
       build = await (await fetch("/api/local/state", { headers: auth() })).json();
@@ -92,7 +98,8 @@
   async function runCheck(force) {
     const btn = $("#maint-check");
     btn.disabled = true;
-    status(force ? "спрашиваю upstream…" : "читаю последнюю проверку…");
+    // the button is already disabled while the answer comes; a run's line is worth more than a spinner
+    if (!lastResult) status(force ? "спрашиваю upstream…" : "читаю последнюю проверку…", "");
     try {
       check = await (await fetch(`/api/local/update/check${force ? "?force=1" : ""}`, { headers: auth() })).json();
       renderCheck();
@@ -110,6 +117,25 @@
     const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 24;
     el.textContent = (el.textContent + text).slice(-LOG_LIMIT);
     if (atBottom) el.scrollTop = el.scrollHeight;
+  }
+
+  function clearLog() {
+    $("#maint-log").textContent = "";
+    next = 0;
+  }
+
+  /* One pass over everything written so far: the tail hands over whole lines only, so a run whose
+     last line is still being written stops the loop on its own. */
+  async function drain() {
+    for (let i = 0; i < READS_MAX; i += 1) {
+      const log = await (await fetch(`/api/local/update/log?since=${next}`, { headers: auth() })).json();
+      if (log.size < next) next = 0;                   // the file was truncated: this is a new run
+      const before = next;
+      append(log.text);
+      next = log.next;
+      if (next === before) break;                      // nothing new (a half-written line, or done)
+      if (next >= log.size) break;
+    }
   }
 
   function renderResult(result) {
@@ -130,41 +156,76 @@
 
   /* --- watching a run ---------------------------------------------------- */
   function stop() {
+    watching = false;
     if (timer) clearTimeout(timer);
     timer = null;
   }
 
   async function poll() {
     timer = null;
+    if (!watching) return;
     let state;
     try {
       state = await (await fetch("/api/local/update", { headers: auth() })).json();
     } catch {
       // the server restarts in the middle of an update: keep waiting instead of declaring a failure
-      restarts += 1;
-      status("сервер перезапускается, жду…");
-      timer = setTimeout(poll, 2000);
+      status("сервер перезапускается, жду…", "");
+      timer = setTimeout(poll, POLL_MS * 2);
       return;
     }
     try {
-      const log = await (await fetch(`/api/local/update/log?since=${next}`, { headers: auth() })).json();
-      if (log.size < next) next = 0;             // the file was truncated: this is a new run
-      append(log.text);
-      next = log.next;
+      await drain();
     } catch { /* the log is best effort: a failed read must not stop the watch */ }
     if (state.running) {
-      timer = setTimeout(poll, 1000);
+      lastResult = null;
+      timer = setTimeout(poll, POLL_MS);
       return;
     }
+    stop();
+    shown = state.result ? (state.result.finished_at ?? "") : "";
+    lastResult = state.result || null;
     renderResult(state.result);
     await loadState();
-    await runCheck(false);                        // the tag and the tree have moved
+    await runCheck(false);                             // the tag and the tree have moved
   }
 
-  function watch() {
-    stop();
-    restarts = 0;
+  function startWatch() {
+    if (watching) return;
+    watching = true;
     timer = setTimeout(poll, 300);
+  }
+
+  /* --- one place that decides what the pane should show ------------------ */
+  async function sync() {
+    let state;
+    try {
+      state = await (await fetch("/api/local/update", { headers: auth() })).json();
+    } catch {
+      return;                                          // loadState has already said the server is away
+    }
+    if (state.running) {
+      if (watching) return;
+      clearLog();
+      shown = "running";
+      lastResult = null;                               // the run's own line owns the status while it runs
+      status("обновление идёт…", "");
+      startWatch();
+      return;
+    }
+    stop();
+    if (!state.result) {
+      shown = null;
+      lastResult = null;
+      return;
+    }
+    const key = state.result.finished_at ?? "";
+    if (key !== shown) {                               // a run not on screen yet: read it from the start
+      clearLog();
+      shown = key;
+      try { await drain(); } catch { /* show what came through */ }
+    }
+    lastResult = state.result;
+    renderResult(state.result);
   }
 
   /* --- start a run ------------------------------------------------------- */
@@ -174,9 +235,10 @@
     const btn = $("#maint-run");
     btn.disabled = true;
     warn("");
-    status("запускаю обновление…");
-    $("#maint-log").textContent = "";
-    next = 0;
+    status("запускаю обновление…", "");
+    clearLog();
+    shown = "running";
+    lastResult = null;                                 // the line belongs to the run that is starting
     try {
       const r = await fetch("/api/local/update", {
         method: "POST", headers: auth(), body: JSON.stringify({ target }),
@@ -184,12 +246,14 @@
       const out = await r.json();
       if (!out.started) {
         status(out.error || "обновление не запустилось", "err");
+        shown = null;
         btn.disabled = false;
         return;
       }
-      watch();
+      startWatch();
     } catch (e) {
       status("не удалось запустить: " + e.message, "err");
+      shown = null;
       btn.disabled = false;
     }
   }
@@ -198,20 +262,21 @@
   async function init() {
     $("#maint-check").addEventListener("click", () => runCheck(true));
     $("#maint-run").addEventListener("click", run);
-    $("#maint-log-clear").addEventListener("click", () => { $("#maint-log").textContent = ""; });
+    $("#maint-log-clear").addEventListener("click", clearLog);
     window.basaltViews?.on("maint", refresh);
     await refresh();
   }
 
+  let pending = null;                  // the refresh in flight: clicking the tab twice must not queue two
+
   async function refresh() {
-    await loadState();
-    await runCheck(false);
-    // a run started from another tab, or from before a page reload: pick the log up from the start
-    try {
-      const st = await (await fetch("/api/local/update", { headers: auth() })).json();
-      if (st.running) watch();
-      else if (st.result) { $("#maint-log").textContent = ""; next = 0; await poll(); }
-    } catch { /* the page shows "server does not answer" already */ }
+    if (pending) return pending;
+    pending = (async () => {
+      await loadState();
+      await sync();                    // the run first: its line may be worth keeping
+      await runCheck(false);
+    })().finally(() => { pending = null; });
+    return pending;
   }
 
   if (document.readyState !== "loading") init();
