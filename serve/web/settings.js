@@ -334,7 +334,9 @@
     const r = runtime;
     const bits = [];
     if (r) {
-      bits.push(r.loaded ? "модель загружена" : (r.loading ? `загрузка ${r.percent ?? 0}%` : "модель выгружена"));
+      bits.push(r.model
+        ? (r.loaded ? `загружена: ${r.model}` : (r.loading ? `загружается: ${r.model}` : `выгружена: ${r.model}`))
+        : (r.loaded ? "модель загружена" : (r.loading ? `загрузка ${r.percent ?? 0}%` : "модель выгружена")));
       if (r.max_context) bits.push(`контекст ${r.max_context.toLocaleString("ru-RU")}`);
       bits.push(r.images ? "изображения вкл" : "изображения выкл");
       if (r.video) bits.push("видео вкл");
