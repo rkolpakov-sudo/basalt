@@ -9,6 +9,11 @@ rather than the download.
 The page reads two things: `status()`, which answers "how far" from memory, and the log, which answers
 "what happened" and, being a file, survives a server restart in the middle of a run.  A run whose
 thread is gone without a result is reported as interrupted -- starting it again resumes the same file.
+
+"How far" is measured on disk (see `_bytes_on_disk`), not from the library's progress bar: the pack
+comes down through hf_xet, which reports only as calls on a tqdm-shaped object, and a class of ours
+that accepted those calls got one of them and then was never asked again -- the bar sat at 0 while the
+file filled to 18 GiB.
 """
 from __future__ import annotations
 
@@ -23,7 +28,7 @@ from serve.local import catalog, logs, state
 
 LOG = Path("logs") / "download.log"
 STATE_FILE = Path("logs") / "download.json"
-FLUSH_S = 1.0                    # how often progress is written out: the page polls at 1 s
+POLL_S = 1.0                     # how often the file on disk is measured: the page polls at 1 s
 MARK_GIB = 2.0                   # a log line every couple of GiB, so the log is worth reading
 
 _lock = threading.Lock()
@@ -92,69 +97,71 @@ def tail(since: int = 0) -> dict:
     return out
 
 
-# --- the progress reporter ---------------------------------------------------
-class _Bar:
-    """What huggingface_hub asks for instead of a progress bar: it constructs the class with the
-    keyword arguments it would give tqdm, uses it as a context manager and calls `update` with the
-    bytes of every chunk.  This only reports -- the transfer and its retries stay in the library,
-    which hands the same object to the resumed call so counts are not doubled."""
+# --- the progress ------------------------------------------------------------
+def _incomplete(cache: Path) -> list[Path]:
+    """The temp files a transfer is being written into, under `models/.cache/huggingface/download`."""
+    try:
+        return list(cache.rglob("*.incomplete")) if cache.is_dir() else []
+    except OSError:
+        return []
 
-    def __init__(self, *args, **kwargs):
-        self.total = int(kwargs.get("total") or 0)
-        self.done = int(kwargs.get("initial") or 0)        # bytes already on disk when a resume started
-        self._last_flush = time.time()
-        self._mark = 0.0
-        self._from = time.time()
-        self._from_bytes = self.done
 
-    def __enter__(self):
-        return self
+def _bytes_on_disk(filename: str, sha: str, since: float) -> int:
+    """How much of this pack is already on disk: the pack itself, plus the file it is being written to.
 
-    def __exit__(self, *exc):
-        self.close()
-        return False
+    The temp file's name carries the pack's sha256, which is what tells this run's file apart from a
+    leftover of some other download; `since` covers a pack whose sha the listing did not have.
+    """
+    done = _size(catalog.models_dir() / filename)
+    for p in _incomplete(catalog.models_dir() / ".cache" / "huggingface" / "download"):
+        try:
+            st = p.stat()
+        except OSError:
+            continue
+        if (sha and sha in p.name) or st.st_mtime >= since:
+            done += st.st_size
+    return done
 
-    def update(self, n=0):
-        if not n:
-            return
-        self.done += int(n)
+
+def _report(done: int, rate: float, now: float) -> None:
+    """One reading: in memory for the page polling us, on disk for a restart in the middle of a run."""
+    with _lock:
+        _run.update({"bytes_done": int(done), "bytes_per_s": int(round(rate)), "updated_at": int(now)})
+        snapshot = dict(_run)
+    _write_state(snapshot)
+
+
+def _line(done: int, rate: float, now: float, total: int) -> None:
+    part = f"{done / 2**30:.1f}/{total / 2**30:.1f} ГиБ" if total else f"{done / 2**30:.1f} ГиБ"
+    share = f" ({done * 100 // total}%)" if total else ""
+    stamp = time.strftime("%H:%M:%S", time.localtime(now))
+    logs.append(_at(LOG), f"{stamp}  {part}{share}, {rate / 2**20:.0f} МиБ/с")
+
+
+def _watch(filename: str, sha: str, stop: threading.Event) -> None:
+    """Follow this pack on disk once a second, until the download thread sets `stop`.
+
+    The count only ever grows: the temp file is renamed away the instant the pack is whole, so the
+    reading taken just before that would otherwise fall back to zero.
+    """
+    seen = 0
+    mark = 0.0
+    from_at = time.time()
+    from_bytes = _bytes_on_disk(filename, sha, from_at)
+    while True:
+        stopped = stop.wait(POLL_S)
         now = time.time()
-        if now - self._last_flush >= FLUSH_S:
-            self._flush(now)
-        if self.done - self._mark >= MARK_GIB * 2**30:
-            self._mark = self.done
-            self._line(now)
-
-    def close(self):
-        """Flush the last partial second; the run's real ending is written by the caller."""
-        self._flush(time.time())
-
-    def _rate(self, now: float) -> float:
-        """Bytes per second since the last report.  A resume counts from where the file left off, so the
-        speed stays honest."""
-        span = max(now - self._from, 0.01)
-        rate = max(self.done - self._from_bytes, 0) / span
-        self._from, self._from_bytes = now, self.done
-        return rate
-
-    def _snapshot(self, now: float, rate: float) -> dict:
+        seen = max(seen, _bytes_on_disk(filename, sha, from_at))
+        rate = max(seen - from_bytes, 0) / max(now - from_at, 0.01)
         with _lock:
-            _run.update({"bytes_done": self.done, "bytes_total": self.total or _run.get("bytes_total"),
-                         "bytes_per_s": round(rate), "updated_at": int(now)})
-            self._last_flush = now
-            return dict(_run)
-
-    def _flush(self, now: float) -> None:
-        _write_state(self._snapshot(now, self._rate(now)))
-
-    def _line(self, now: float) -> None:
-        rate = self._rate(now)                       # once: the second call would reset the window
-        snapshot = self._snapshot(now, rate)
-        total = int(snapshot.get("bytes_total") or 0)
-        part = (f"{self.done / 2**30:.1f}/{total / 2**30:.1f} ГиБ" if total
-                else f"{self.done / 2**30:.1f} ГиБ")
-        share = f" ({self.done * 100 // total}%)" if total else ""
-        logs.append(_at(LOG), f"{time.strftime('%H:%M:%S')}  {part}{share}, {rate / 2**20:.0f} МиБ/с")
+            total = int(_run.get("bytes_total") or 0)
+        _report(seen, rate, now)
+        if seen - mark >= MARK_GIB * 2**30:
+            mark = seen
+            _line(seen, rate, now, total)
+        from_at, from_bytes = now, seen
+        if stopped:
+            break
 
 
 # --- the run -----------------------------------------------------------------
@@ -171,14 +178,26 @@ def _note_start(repo: str, filename: str, total: int) -> None:
 
 
 def _note_finish(ok: bool, error: str, path: str = "") -> None:
+    finished = int(time.time())
     with _lock:
-        _run.update({"running": False, "finished_at": int(time.time()), "ok": ok,
+        before = int(_run.get("bytes_done") or 0)
+        _run.update({"running": False, "finished_at": finished, "ok": ok,
                      "error": None if ok else error, "path": path or _run.get("path")})
+        if ok:
+            # the file is the pack now, whole: say so rather than the watcher's last second-hand reading
+            total = int(_run.get("bytes_total") or 0)
+            seconds = max(finished - int(_run.get("started_at") or finished), 0)
+            _run.update({"bytes_done": total,
+                         "bytes_per_s": int(total / seconds) if seconds else 0})
         snapshot = dict(_run)
     _write_state(snapshot)
     if ok:
         seconds = (snapshot.get("finished_at", 0) - snapshot.get("started_at", 0)) or 0
-        logs.append(_at(LOG), f"{time.strftime('%H:%M:%S')}  готово: {snapshot.get('path')} за {_human(seconds)}")
+        stamp = time.strftime("%H:%M:%S", time.localtime(finished))
+        total = int(snapshot.get("bytes_total") or 0)
+        if total and before < total:
+            _line(total, snapshot.get("bytes_per_s") or 0, finished, total)
+        logs.append(_at(LOG), f"{stamp}  готово: {snapshot.get('path')} за {_human(seconds)}")
         state.merge(downloads={snapshot["file"]: {"repo": snapshot["repo"], "at": snapshot["finished_at"],
                                                   "bytes": snapshot.get("bytes_done"),
                                                   "path": snapshot.get("path")}})
@@ -242,10 +261,24 @@ def _start_thread(repo: str, filename: str) -> None:
 
 def _download(repo: str, filename: str) -> None:
     download = _hf_download()
+    sha = ""
+    try:
+        _, pack = catalog.find(repo, filename)      # the temp file's name carries this pack's hash
+        sha = str((pack or {}).get("sha256") or "")
+    except Exception:                               # noqa: BLE001 - a nicety; the file still counts
+        pass
+    stop = threading.Event()
+    watcher = threading.Thread(target=_watch, args=(filename, sha, stop),
+                               name="basalt-download-watch", daemon=True)
+    watcher.start()
     try:
         path = download(repo_id=repo, filename=filename, local_dir=str(catalog.models_dir()),
-                        library_name="basalt-local", tqdm_class=_Bar)
+                        library_name="basalt-local")
     except Exception as e:            # noqa: BLE001 - any transfer failure is shown as its own reason
+        stop.set()
+        watcher.join(timeout=POLL_S * 4)
         _note_finish(False, f"{type(e).__name__}: {e}")
         return
+    stop.set()
+    watcher.join(timeout=POLL_S * 4)
     _note_finish(True, "", str(path))

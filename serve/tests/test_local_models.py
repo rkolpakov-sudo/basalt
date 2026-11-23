@@ -1,10 +1,14 @@
 """The model catalog and the downloader: what the models tab is built from.
 
 Nothing here reaches Hugging Face or the network: the file listings come through a mocked
-`_get_json`, and a download runs a fake `hf_hub_download` that only drives the progress reporter.
-The real transfer, its retries and its resume are huggingface_hub's own code, tested upstream."""
+`_get_json`, and a download runs a fake `hf_hub_download` that writes a pack the way the library
+does -- a temp file under `.cache`, renamed onto the pack when it is whole.  The real transfer, its
+retries and its resume are huggingface_hub's own code, tested upstream."""
 import json
+import os
 import tempfile
+import threading
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -13,6 +17,7 @@ from serve.local import api, catalog, downloader, logs, state
 
 INKLING = "jesdga/Inkling-2-Mini-Basalt"
 PACK = "Inkling-2-Mini-NVFP4-DQ8.basalt"
+SHA = "f" * 64                     # the pack's hash, as the listing reports it
 GIB = 2 ** 30
 
 
@@ -255,11 +260,14 @@ class Downloader(unittest.TestCase):
                                    side_effect=lambda repo, filename: downloader._download(repo, filename))
         patcher.start()
         self.addCleanup(patcher.stop)
+        patcher = mock.patch.object(downloader, "POLL_S", 0.02)       # the watcher, at test speed
+        patcher.start()
+        self.addCleanup(patcher.stop)
         self.addCleanup(lambda: setattr(downloader, "_run", {}))
 
     def allow(self):
         """Let the checks pass: the pack is known, there is room, and none of it is on disk yet."""
-        pack = {"name": PACK, "bytes": 18 * GIB}
+        pack = {"name": PACK, "bytes": 18 * GIB, "sha256": SHA}
         for target, name, value in ((catalog, "find", ({"model": "Inkling 2 Mini"}, pack)),
                                     (catalog, "installed", []),
                                     (catalog, "fits", (True, ""))):
@@ -268,20 +276,35 @@ class Downloader(unittest.TestCase):
             self.addCleanup(patcher.stop)
 
     def transfer(self, fail=None):
-        """A stand-in for hf_hub_download: drives the reporter the way the library does."""
-        def download(repo_id, filename, local_dir, library_name, tqdm_class):
-            target = Path(local_dir) / filename
-            with tqdm_class(total=18 * GIB, initial=0, disable=True, desc=filename) as bar:
-                for _ in range(3):
-                    bar.update(6 * GIB)
+        """A stand-in for hf_hub_download: writes the pack the way the library does.
+
+        Bytes land in a temp file named after the pack's hash (that name is what the progress watcher
+        looks for), and the temp file is renamed onto the pack only when the transfer is over."""
+        def download(repo_id, filename, local_dir, library_name):
+            cache = Path(local_dir) / ".cache" / "huggingface" / "download"
+            cache.mkdir(parents=True, exist_ok=True)
+            temp = cache / f"part.{SHA}.incomplete"
+            temp.write_bytes(b"part")
             if fail:
                 raise fail
-            target.write_bytes(b"pack")
+            target = Path(local_dir) / filename
+            temp.replace(target)
             return str(target)
 
         patcher = mock.patch.object(downloader, "_hf_download", return_value=download)
         patcher.start()
         self.addCleanup(patcher.stop)
+
+    def grow(self, temp: Path, size: int) -> None:
+        """Put `size` bytes in the temp file and wait until the watcher has read them back.
+
+        The file is written on every pass, the way a transfer does: what the watcher looks for is a
+        file touched during this run, and a single write could land before the watcher noted when the
+        run began."""
+        deadline = time.time() + 5
+        while int(downloader._run.get("bytes_done") or 0) < size and time.time() < deadline:
+            temp.write_bytes(b"x" * size)
+            time.sleep(0.02)
 
     def test_a_pack_comes_to_the_models_folder_and_is_reported(self):
         self.allow()
@@ -295,7 +318,9 @@ class Downloader(unittest.TestCase):
         self.assertTrue(st["ok"])
         self.assertEqual(st["bytes_done"], 18 * GIB)
         self.assertEqual(state.load()["downloads"][PACK]["repo"], INKLING)
-        self.assertIn("готово", self.log.read_text(encoding="utf-8"))
+        log = self.log.read_text(encoding="utf-8")
+        self.assertIn("100%", log)
+        self.assertIn("готово", log)
 
     def test_a_transfer_that_fails_is_the_run_s_own_reason(self):
         self.allow()
@@ -389,12 +414,47 @@ class Downloader(unittest.TestCase):
         self.assertEqual(downloader.tail(first["next"])["text"], "")
         self.assertFalse(first["running"])
 
-    def test_the_reporter_holds_the_speed_and_the_bytes(self):
-        bar = downloader._Bar(total=10 * GIB, initial=2 * GIB)
-        bar.update(3 * GIB)
-        bar.close()
-        run = dict(downloader._run)
-        self.assertEqual(bar.done, 5 * GIB)
+    def test_the_progress_is_the_pack_growing_on_disk(self):
+        """The watcher follows the file: a resumed temp file counts, some other file's does not."""
+        cache = self.models / ".cache" / "huggingface" / "download"
+        cache.mkdir(parents=True)
+        temp = cache / f"part.{SHA}.incomplete"
+        temp.write_bytes(b"r" * 300)                      # a resume: here, but not touched this run
+        old = time.time() - 3600
+        os.utime(temp, (old, old))
+        leftover = cache / "part.deadbeef.incomplete"     # another file's half: not this run's progress
+        leftover.write_bytes(b"x" * 700)
+        os.utime(leftover, (old, old))
+        run = {"bytes_total": 10 * GIB}
+        with mock.patch.object(downloader, "_run", run):
+            stop = threading.Event()
+            watcher = threading.Thread(target=downloader._watch, args=(PACK, SHA, stop), daemon=True)
+            watcher.start()
+            try:
+                self.grow(temp, 700)
+            finally:
+                stop.set()
+                watcher.join(timeout=5)
+        self.assertFalse(watcher.is_alive())
+        self.assertEqual(int(run["bytes_done"]), 700)     # 300 resumed + 400 new, no leftover
+
+    def test_a_pack_whose_hash_the_listing_lacked_is_still_measured(self):
+        """Without a hash to look for, the temp file is recognised by having been written this run."""
+        cache = self.models / ".cache" / "huggingface" / "download"
+        cache.mkdir(parents=True)
+        temp = cache / "part.whatever.incomplete"
+        temp.write_bytes(b"z" * 500)
+        run = {}
+        with mock.patch.object(downloader, "_run", run):
+            stop = threading.Event()
+            watcher = threading.Thread(target=downloader._watch, args=(PACK, "", stop), daemon=True)
+            watcher.start()
+            try:
+                self.grow(temp, 500)
+            finally:
+                stop.set()
+                watcher.join(timeout=5)
+        self.assertEqual(int(run["bytes_done"]), 500)
 
 
 class ModelsRoutes(unittest.TestCase):
