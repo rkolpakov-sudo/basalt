@@ -21,33 +21,59 @@
      configured.  Every other setting follows the chosen model into its own entry as soon as a second
      model exists, so two models keep separate contexts and KV caches (an entry's own value wins over
      the shared "engine" block).
-     "moe" marks a setting only a mixture-of-experts model has: it is grayed out on a dense model. */
+     "moe" marks a setting only a mixture-of-experts model has: it is grayed out on a dense model.
+     "adv" marks a setting outside the simple mode: the form opens with the 8 fields a run is usually
+     tuned by (context, KV, images, slots, sampling, VRAM reserve); everything else waits for
+     «Режим: продвинутый» or for a search that matches it. */
   const FIELDS = [
     { id: "#s-ctx",          key: "max-context",                 num: true, block: "engine" },
-    { id: "#s-kvr",          key: "kv-resident",                 num: true, block: "engine" },
+    { id: "#s-kvr",          key: "kv-resident",                 num: true, block: "engine", adv: true },
     { id: "#s-kv",           key: "kv",                                     block: "engine" },
     { id: "#s-vision",       key: "vision",                                 block: "entry" },
     { id: "#s-par",          key: "parallel",                    num: true, block: "entry" },
-    { id: "#s-slotfull",     key: "slot-full-context",           bool: true, block: "entry" },
+    { id: "#s-slotfull",     key: "slot-full-context",           bool: true, block: "entry", adv: true },
     { id: "#s-vram",         key: "vram-reserve-mib",            num: true, block: "engine", shared: true },
-    { id: "#s-spec",         key: "spec",                        num: true, block: "engine" },
-    { id: "#s-port",         key: "port",                        num: true, block: "server", shared: true },
-    { id: "#s-vramelastic",  key: "vram-elastic",                bool: true, block: "engine", moe: true },
-    { id: "#s-expertcache",  key: "expert-cache",                           block: "engine", moe: true },
-    { id: "#s-resexperts",   key: "resident-experts",            bool: true, block: "engine", moe: true },
-    { id: "#s-mmapexperts",  key: "mmap-experts",                bool: true, block: "engine", moe: true },
-    { id: "#s-resbudget",    key: "resident-budget-gib",         num: true, block: "engine", moe: true },
-    { id: "#s-prefillcpu",   key: "prefill-cpu-share",        numFloat: true, block: "engine", moe: true },
-    { id: "#s-adaptswaps",   key: "adapt-swaps",                 num: true, block: "engine", moe: true },
-    { id: "#s-ramres",       key: "ram-reserve-mib",             num: true, block: "engine", shared: true },
-    { id: "#s-cache",        key: "conversation-cache-mib",      num: true, block: "engine", shared: true },
-    { id: "#s-cachedisk",    key: "conversation-cache-disk-mib", num: true, block: "engine", shared: true },
-    { id: "#s-reason",       key: "reasoning-budget-tokens",     num: true, block: "entry" },
-    { id: "#s-answerroom",   key: "answer-room",                            block: "entry" },
+    { id: "#s-spec",         key: "spec",                        num: true, block: "engine", adv: true },
+    { id: "#s-port",         key: "port",                        num: true, block: "server", shared: true, adv: true },
+    { id: "#s-vramelastic",  key: "vram-elastic",                bool: true, block: "engine", moe: true, adv: true },
+    { id: "#s-expertcache",  key: "expert-cache",                           block: "engine", moe: true, adv: true },
+    { id: "#s-resexperts",   key: "resident-experts",            bool: true, block: "engine", moe: true, adv: true },
+    { id: "#s-mmapexperts",  key: "mmap-experts",                bool: true, block: "engine", moe: true, adv: true },
+    { id: "#s-resbudget",    key: "resident-budget-gib",         num: true, block: "engine", moe: true, adv: true },
+    { id: "#s-prefillcpu",   key: "prefill-cpu-share",        numFloat: true, block: "engine", moe: true, adv: true },
+    { id: "#s-adaptswaps",   key: "adapt-swaps",                 num: true, block: "engine", moe: true, adv: true },
+    { id: "#s-ramres",       key: "ram-reserve-mib",             num: true, block: "engine", shared: true, adv: true },
+    { id: "#s-cache",        key: "conversation-cache-mib",      num: true, block: "engine", shared: true, adv: true },
+    { id: "#s-cachedisk",    key: "conversation-cache-disk-mib", num: true, block: "engine", shared: true, adv: true },
+    { id: "#s-reason",       key: "reasoning-budget-tokens",     num: true, block: "entry", adv: true },
+    { id: "#s-answerroom",   key: "answer-room",                            block: "entry", adv: true },
     { id: "#s-temp",         key: "temperature",                 numFloat: true, block: "entry" },
     { id: "#s-topp",         key: "top-p",                       numFloat: true, block: "entry" },
     { id: "#s-topk",         key: "top-k",                       num: true, block: "entry" },
   ];
+
+  /* Profiles fill the form, never the file: the values land in the fields, the changed markers show
+     what moved, and the config is written only by «Сохранить», like any hand edit.  "kv" is not in any
+     profile — its format belongs to the model (fp8 for DeepSeek/Inkling, int8 for Flash-Next) and no
+     profile knows which model is loaded.  "port" survives «Сброс»: it picks the address of this page,
+     and a reset that moves the panel would lock the user out of the very screen that did it. */
+  const PROFILES = {
+    longctx: { label: "«Длинный контекст»", set: { "max-context": 131072 } },
+    speed:   { label: "«Максимум скорости»", set: { "resident-experts": true, "mmap-experts": false,
+               "prefill-cpu-share": 0, "conversation-cache-mib": 4096 } },
+    economy: { label: "«Экономия памяти»", set: { "mmap-experts": true, "resident-experts": false,
+               "vram-elastic": true, "conversation-cache-mib": 0, "conversation-cache-disk-mib": 0 } },
+    reset:   { label: "«Сброс»", reset: true },
+  };
+
+  /* Mode, search and the changed markers.  mode and the query only filter what is shown — a hidden
+     field still holds its value and is still written by save(), so switching back to «простой» or
+     clearing the search never drops an edit.  base is the form as fill() left it; a field whose value
+     differs is marked, and the counter by the search box says how many. */
+  let mode = "simple";                        // "simple" | "advanced", kept between visits
+  let query = "";                             // the search line, lower case
+  let base = {};                              // element id -> value after the last fill()
+  let structDirty = false;                    // a model entry was added or removed, not saved yet
 
   const status = (msg, cls = "") => {
     const s = $("#set-status");
@@ -62,6 +88,113 @@
     if (n10 >= 2 && n10 <= 4 && (n100 < 12 || n100 > 14)) return few;
     return many;
   };
+
+  /* --- mode, search, changed markers ------------------------------------ */
+  /* model and alias are form fields too: the search finds them and the marker follows them, but no
+     profile sets them and «Сброс» never clears them. */
+  const EXTRA = [{ id: "#s-model", key: "model" }, { id: "#s-alias", key: "alias" }];
+  const allFields = () => FIELDS.concat(EXTRA);
+
+  /* The form exactly as fill() left it.  markChanged() compares against it: a field that moved gets
+     a marker and a place in the counter, and «Сохранить» has nothing to write when the form matches
+     the file — it says so instead of posting the same config back. */
+  function captureBase() {
+    base = {};
+    for (const f of allFields()) { const el = $(f.id); if (el) base[f.id] = el.value; }
+  }
+
+  function markChanged() {
+    let n = 0;
+    for (const f of allFields()) {
+      const el = $(f.id);
+      if (!el) continue;
+      const fld = el.closest(".fld");
+      /* A field the model does not support is not written by save(), so a value moved there is not
+         a change to the file and must not be counted as one. */
+      const changed = (el.value ?? "") !== (base[f.id] ?? "")
+        && !(fld && fld.classList.contains("na"));
+      if (fld) fld.classList.toggle("chg", changed);
+      if (changed) n++;
+    }
+    const bits = [];
+    if (n) bits.push(`${n} ${plural(n, "изменение", "изменения", "изменений")} не сохранено`);
+    if (structDirty) bits.push("список моделей изменён");
+    $("#set-dirty").textContent = bits.join(" · ");
+    return n;
+  }
+
+  /* What the mode and the search show.  A search wins over the mode — looking for «kv-resident»
+     finds it in the simple mode too — and hiding is visual only: a hidden field keeps its value and
+     is still written by save(), so switching back never drops an edit. */
+  function filterFields() {
+    const q = query.trim().toLowerCase();
+    for (const f of allFields()) {
+      const el = $(f.id);
+      const fld = el?.closest(".fld");
+      if (!fld) continue;
+      if (q) {
+        const label = fld.querySelector("label")?.textContent || "";
+        fld.hidden = !(f.key + " " + label).toLowerCase().includes(q);
+      } else {
+        fld.hidden = !!f.adv && mode === "simple";
+      }
+    }
+    const mb = $("#set-mode");
+    if (mb) {
+      mb.textContent = mode === "simple" ? "Режим: простой" : "Режим: продвинутый";
+      mb.classList.toggle("adv", mode === "advanced");
+    }
+    /* A heading owns everything up to the next one: when none of its fields shows, the block goes
+       with them — except the toolbar, which is where the search itself lives.  A block without
+       fields («Обслуживание») shows only while nothing is being searched. */
+    for (const h of document.querySelectorAll("#view-settings .set-h")) {
+      const range = [];
+      let el = h.nextElementSibling;
+      while (el && el.tagName !== "H3" && !el.classList.contains("set-foot")) {
+        range.push(el);
+        el = el.nextElementSibling;
+      }
+      const flds = range.flatMap(x => x.classList.contains("fld") ? [x] : [...x.querySelectorAll(".fld")]);
+      const any = flds.length ? flds.some(x => !x.hidden) : !q;
+      h.hidden = !any;
+      for (const x of range) {
+        if (x.id === "set-tools" || x.classList.contains("fld")) continue;
+        x.hidden = !any;
+      }
+    }
+  }
+
+  /* A profile moves the form and nothing else: the changed markers show what it touched, the fields
+     it needs are brought into view (a profile whose fields the mode or the search hides would look
+     like a no-op), and the file is written only by «Сохранить», like any hand edit. */
+  function applyProfile(name) {
+    const p = PROFILES[name];
+    if (!p) return;
+    const set = {};
+    if (p.reset) {
+      /* Every engine parameter back to its default — an empty field drops the key on save.  kv stays:
+         its format belongs to the loaded model.  port stays: it is the address of this page. */
+      for (const f of FIELDS) if (f.block === "engine" && f.key !== "kv") set[f.key] = "";
+    } else {
+      Object.assign(set, p.set);
+    }
+    for (const [key, val] of Object.entries(set)) {
+      const f = FIELDS.find(x => x.key === key);
+      const el = f && $(f.id);
+      if (!el) continue;
+      el.value = f.bool ? (val === true ? "true" : val === false ? "false" : "") : String(val);
+    }
+    const touched = () => Object.keys(set).some(k => {
+      const f = FIELDS.find(x => x.key === k);
+      return !!f && !!$(f.id)?.closest(".fld")?.hidden;
+    });
+    if (touched()) { mode = "advanced"; filterFields(); }        // the profile's fields are not in the simple mode
+    if (touched()) { query = ""; $("#set-search").value = ""; filterFields(); }   // the search is in the way
+    warn();
+    const n = markChanged();
+    status(n ? `Профиль ${p.label}: изменено полей — ${n}. Нажмите «Сохранить», чтобы записать конфиг.`
+             : `${p.label}: значения уже стоят — изменений нет.`, "ok");
+  }
 
   /* --- the config file, and where a key lives in it ---------------------- */
   const entries = () => Array.isArray(raw.models) ? raw.models : (raw.models = []);
@@ -156,6 +289,7 @@
       row.classList.toggle("na", off);
       for (const el of row.querySelectorAll("input, select")) el.disabled = off;
     }
+    markChanged();                         // a field grayed out mid-edit stops counting as changed
     const box = $("#set-caps");
     if (!box) return;
     if (!caps) { box.innerHTML = rowFor(editIdx, entries()[editIdx] || {})?.path ? "определяю возможности модели…" : ""; return; }
@@ -187,10 +321,12 @@
       if (f.bool) el.value = v === true ? "true" : v === false ? "false" : "";
       else el.value = v ?? "";
     }
+    captureBase();                    // this entry's own values are the new "no changes yet" line
     $("#set-path").textContent = path ? path.split(/[\\/]/).pop() : "";
     fillModels();
     applyCaps();
     drawLive();
+    markChanged();
     warn();
   }
 
@@ -228,6 +364,7 @@
       runtime = j.runtime || null;
       rows = j.models || [];
       if (j.read_error) { status(`Файл не читается: ${j.read_error}`, "err"); return; }
+      structDirty = false;                                 // the file was just read: it is the truth again
       fill();
       status("");
       refreshCaps();                                           // asked of the engine, so not blocking the form
@@ -318,6 +455,8 @@
     entries().push({});
     editIdx = entries().length - 1;
     fill();
+    structDirty = true;                                    // the list changed, not just a field
+    markChanged();
     refreshCaps();
     status("Добавлена пустая модель — укажите её файл в поле model и сохраните.", "ok");
   }
@@ -329,12 +468,15 @@
     editIdx = Math.max(0, editIdx - 1);
     capsIdx = -1;                                              // the numbering shifted
     fill();
+    structDirty = true;
+    markChanged();
     refreshCaps();
     status("Модель удалена из формы — нажмите «Сохранить», чтобы записать конфиг.", "ok");
   }
 
   async function save(restart) {
     if (!entries().length) return status("Конфиг ещё не загружен — нажмите «Перечитать».", "err");
+    if (!structDirty && !markChanged()) return status("Нет изменений — конфиг не перезаписан.", "ok");
     const cfg = editedEntry();
     setBusy(true);
     status(restart ? "Сохранение и перезапуск…" : "Сохранение…");
@@ -342,6 +484,9 @@
       const r = await fetch("/api/config", { method: "POST", headers: auth(), body: JSON.stringify({ config: cfg }) });
       const j = await r.json();
       if (!r.ok) { setBusy(false); return status(`Не сохранено: ${j.error?.message || r.status}`, "err"); }
+      structDirty = false;
+      captureBase();                                         // the form now IS the file
+      markChanged();
       status(restart ? "Сохранено. Перезапуск…" : "Сохранено.", "ok");
     } catch (e) {
       setBusy(false);
@@ -440,9 +585,18 @@
       } catch (e) { status(`Ошибка: ${e.message}`, "err"); }
     });
     for (const el of document.querySelectorAll("#view-settings input, #view-settings select")) {
-      el.addEventListener("change", warn);
-      el.addEventListener("input", warn);
+      el.addEventListener("change", () => { warn(); markChanged(); });
+      el.addEventListener("input", () => { warn(); markChanged(); });
     }
+    $("#set-search").addEventListener("input", e => { query = e.target.value; filterFields(); });
+    $("#set-mode").addEventListener("click", () => {
+      mode = mode === "simple" ? "advanced" : "simple";
+      filterFields();
+    });
+    for (const b of document.querySelectorAll("#set-tools [data-prof]")) {
+      b.addEventListener("click", () => applyProfile(b.dataset.prof));
+    }
+    filterFields();                                          // the mode label and the initial view
     // the alias and the model file also rename the entry in the list, as they are typed
     for (const id of ["#s-alias", "#s-model"]) {
       const el = $(id);

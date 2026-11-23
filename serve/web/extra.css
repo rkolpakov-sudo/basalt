@@ -113,6 +113,25 @@ video.img { max-width: 320px; border-radius: 6px; }
 .set-status.err { color: var(--err); }
 .set-status.ok { color: var(--ember-hot); }
 
+/* Toolbar over the groups: search, simple/advanced mode, the four profiles, the dirty counter. */
+.set-tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px 12px; margin: 0 0 4px;
+             background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
+.set-tools input[type="search"] { flex: 0 1 230px; min-width: 150px; background: var(--basalt-950);
+             border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; color: var(--fg);
+             font: 13px var(--font-sans); }
+.set-tools input[type="search"]:focus { outline: none; border-color: var(--raised); }
+.set-tools input[type="search"]::placeholder { color: var(--fg-3); }
+#set-mode.adv { border-color: var(--ember); color: var(--ember-hot); }
+.set-dirty { font: 12px var(--font-mono); color: var(--ember-hot); }
+.set-dirty:empty { display: none; }
+
+/* A field whose value differs from the file: what a profile or an edit moved. */
+.fld.chg > label { color: var(--ember-hot); }
+.fld.chg > input, .fld.chg > select { border-color: var(--ember); }
+
+/* The group filter hides elements whose own display rule (flex, grid) would beat the [hidden] one. */
+#view-settings [hidden] { display: none !important; }
+
 /* Maintenance: the version block, the update controls and the run's log. */
 .maint-body { flex: 1 1 0; min-height: 0; overflow-y: auto; padding: 16px 20px; display: flex; flex-direction: column; }
 .maint-grid { display: grid; grid-template-columns: max-content 1fr; gap: 6px 18px; align-items: baseline;

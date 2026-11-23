@@ -127,6 +127,18 @@
       <code>basalt_config.json.bak</code>. Пустое поле = значение по умолчанию. Параметры генерации
       (temperature, top_p и прочие) задаются во вкладке «Чат» и применяются к каждому запросу без перезапуска.</p>
 
+    <div class="set-tools" id="set-tools">
+      <input type="search" id="set-search" placeholder="Поиск параметра…" spellcheck="false" aria-label="Поиск параметра">
+      <button class="mbtn" id="set-mode" type="button">Режим: простой</button>
+      <span class="grow"></span>
+      <button class="mbtn" type="button" data-prof="longctx" title="Контекст 131 072 токена — обученная длина Qwen3.8-27B и Flash-Next">Длинный контекст</button>
+      <button class="mbtn" type="button" data-prof="speed" title="Эксперты в закреплённой RAM, весь промпт на GPU, кэш разговоров 4 ГиБ">Максимум скорости</button>
+      <button class="mbtn" type="button" data-prof="economy" title="Эксперты в файле, кэш разговоров выключен, VRAM гибко отдаётся играм">Экономия памяти</button>
+      <button class="mbtn" type="button" data-prof="reset" title="Параметры движка — значения по умолчанию. kv, port, model и alias не трогаются">Сброс</button>
+      <span class="set-dirty" id="set-dirty"></span>
+    </div>
+
+    <h3 class="set-h">Контекст и KV</h3>
     <div class="set-grid">
       <div class="fld">
         <label for="s-ctx">max-context <small>длина контекста, токенов</small></label>
@@ -148,6 +160,7 @@
         <select id="s-kv">
           <option value="fp16">fp16</option>
           <option value="int8">int8</option>
+          <option value="fp8">fp8 (DeepSeek, Inkling)</option>
           <option value="q4_0">q4_0 (не с kv-resident)</option>
           <option value="k8v4">k8v4 (не с kv-resident)</option>
         </select>
@@ -155,6 +168,10 @@
           int8 сжимает вдвое (почти без потерь качества, рекомендуется); q4_0 и k8v4 сжимают сильнее,
           чуть снижая точность, и несовместимы с kv-resident.</p>
       </div>
+    </div>
+
+    <h3 class="set-h">Слоты и ввод</h3>
+    <div class="set-grid">
       <div class="fld">
         <label for="s-vision">vision <small>ввод изображений</small></label>
         <select id="s-vision">
@@ -186,6 +203,10 @@
           → по 32 768 токенов). Включено: каждый слот получает весь <code>max-context</code>, и KV-кэш занимает
           в N раз больше памяти. Нужно, когда несколько клиентов работают с полным контекстом одновременно.</p>
       </div>
+    </div>
+
+    <h3 class="set-h">Память</h3>
+    <div class="set-grid">
       <div class="fld">
         <label for="s-vram">vram-reserve-mib <small>резерв VRAM, МиБ</small></label>
         <input type="number" id="s-vram" min="256" step="64">
@@ -194,37 +215,16 @@
           меньше и часть работы уйдёт на CPU. Минимум 256 МиБ.</p>
       </div>
       <div class="fld">
-        <label for="s-spec">spec <small>окна спекуляции (0 — выкл, до 16)</small></label>
-        <input type="number" id="s-spec" min="0" max="16" step="1">
-        <p class="expl">Спекулятивное декодирование: черновик предсказывает до N токенов вперёд, модель
-          проверяет их одним проходом. Ускоряет генерацию в 1.5–3 раза, выход побитово совпадает с обычным.
-          0 отключает. Больше окон — выше выигрыш, но и выше шанс впустую проверенных токенов.</p>
-      </div>
-      <div class="fld">
-        <label for="s-port">port <small>порт сервера</small></label>
-        <input type="number" id="s-port" min="1" max="65535">
-        <p class="expl">TCP-порт на 127.0.0.1. После смены обновите адреса у клиентов (OpenCode, Hermes)
-          и открывайте панель по новому адресу. Проверьте, что порт не занят другой программой.</p>
-      </div>
-      <div class="fld">
-        <label for="s-vramelastic">vram-elastic <small>только модели Flash-Next</small></label>
-        <select id="s-vramelastic">
-          <option value="">по умолчанию (выкл)</option>
-          <option value="true">включено</option>
-          <option value="false">выключено</option>
-        </select>
-        <p class="expl">Держит кэш экспертов сегментами, чтобы команда «Освободить VRAM» могла отдать память
-          другой программе и забрать её позже. <b>Работает только на Flash-Next</b> — у Qwen3.8-27B (плотная,
-          без экспертов) флаг игнорируется; на ней VRAM освобождают выгрузкой модели. Небольшой налог на
-          скорость декодирования, зато игры и рендер перестают падать из-за нехватки VRAM.</p>
-      </div>
-      <div class="fld">
         <label for="s-ramres">ram-reserve-mib <small>резерв RAM, МиБ</small></label>
         <input type="number" id="s-ramres" min="0" step="256">
         <p class="expl">Сколько оперативной памяти оставить системе. Выше резерва движок размещает экспертов в
           RAM; ниже — начинает парковать разговоры и может тормозить ожиданием памяти. 2048 МиБ — разумный
           минимум, 0 полностью отключает защиту (может привести к свопу).</p>
       </div>
+    </div>
+
+    <h3 class="set-h">Кэш разговоров</h3>
+    <div class="set-grid">
       <div class="fld">
         <label for="s-cache">conversation-cache-mib <small>кэш разговоров в RAM, МиБ</small></label>
         <input type="number" id="s-cache" min="0" step="256">
@@ -239,6 +239,10 @@
           Полезно, если работаете с одним длинным документом или проектом. Каждый файл привязан к модели и
           настройкам, при несовпадении удаляется.</p>
       </div>
+    </div>
+
+    <h3 class="set-h">Генерация по умолчанию</h3>
+    <div class="set-grid">
       <div class="fld">
         <label for="s-reason">reasoning-budget-tokens <small>лимит размышлений, токенов</small></label>
         <input type="number" id="s-reason" min="0" step="512">
@@ -271,6 +275,29 @@
         <input type="number" id="s-topk" min="1" max="128" step="1">
         <p class="expl">Жёсткий предел: выбор только из k самых вероятных токенов. Отсекает редкие «мусорные»
           варианты, но при слишком малом k ответ становится шаблонным. 20 — сбалансированное значение.</p>
+      </div>
+      <div class="fld">
+        <label for="s-spec">spec <small>окна спекуляции (0 — выкл, до 16)</small></label>
+        <input type="number" id="s-spec" min="0" max="16" step="1">
+        <p class="expl">Спекулятивное декодирование: черновик предсказывает до N токенов вперёд, модель
+          проверяет их одним проходом. Ускоряет генерацию в 1.5–3 раза, выход побитово совпадает с обычным.
+          0 отключает. Больше окон — выше выигрыш, но и выше шанс впустую проверенных токенов.</p>
+      </div>
+    </div>
+
+    <h3 class="set-h">Эксперты (Flash-Next)</h3>
+    <div class="set-grid">
+      <div class="fld">
+        <label for="s-vramelastic">vram-elastic <small>только модели Flash-Next</small></label>
+        <select id="s-vramelastic">
+          <option value="">по умолчанию (выкл)</option>
+          <option value="true">включено</option>
+          <option value="false">выключено</option>
+        </select>
+        <p class="expl">Держит кэш экспертов сегментами, чтобы команда «Освободить VRAM» могла отдать память
+          другой программе и забрать её позже. <b>Работает только на Flash-Next</b> — у Qwen3.8-27B (плотная,
+          без экспертов) флаг игнорируется; на ней VRAM освобождают выгрузкой модели. Небольшой налог на
+          скорость декодирования, зато игры и рендер перестают падать из-за нехватки VRAM.</p>
       </div>
       <div class="fld">
         <label for="s-expertcache">expert-cache <small>авто или число</small></label>
@@ -327,14 +354,27 @@
       </div>
     </div>
 
-    <p class="set-warn" id="set-warn" hidden></p>
-    <div class="set-actions">
-      <button class="mbtn" id="set-reload" type="button">Перечитать</button>
-      <span class="grow"></span>
-      <button class="mbtn acc" id="set-save" type="button">Сохранить</button>
-      <button class="mbtn hot" id="set-save-restart" type="button">Сохранить и перезапустить</button>
+    <h3 class="set-h">Сервер</h3>
+    <div class="set-grid">
+      <div class="fld">
+        <label for="s-port">port <small>порт сервера</small></label>
+        <input type="number" id="s-port" min="1" max="65535">
+        <p class="expl">TCP-порт на 127.0.0.1. После смены обновите адреса у клиентов (OpenCode, Hermes)
+          и открывайте панель по новому адресу. Проверьте, что порт не занят другой программой.</p>
+      </div>
     </div>
-    <p class="set-status" id="set-status"></p>
+
+    <!-- the footer is outside the group filter: hiding the «Сервер» group must not hide Save -->
+    <div class="set-foot">
+      <p class="set-warn" id="set-warn" hidden></p>
+      <div class="set-actions">
+        <button class="mbtn" id="set-reload" type="button">Перечитать</button>
+        <span class="grow"></span>
+        <button class="mbtn acc" id="set-save" type="button">Сохранить</button>
+        <button class="mbtn hot" id="set-save-restart" type="button">Сохранить и перезапустить</button>
+      </div>
+      <p class="set-status" id="set-status"></p>
+    </div>
   </div>
 </section>
 
