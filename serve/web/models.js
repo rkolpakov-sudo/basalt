@@ -215,7 +215,12 @@
     }
     renderRun();
     if (run.running) return;
-    if (run.ok) status(`${run.file} скачан и лежит в папке models\\ — добавьте его в конфиг, чтобы модель появилась в чате.`, "ok");
+    if (run.ok) {
+      const known = (data?.installed || []).find(r => r.name === run.file);
+      status(known?.in_config
+        ? `${run.file} скачан и уже в конфиге — модель в списке чата.`
+        : `${run.file} скачан и лежит в папке models\\ — добавьте его в конфиг, чтобы модель появилась в чате.`, "ok");
+    }
     else if (run.error) status(run.error, "err");
   }
 
