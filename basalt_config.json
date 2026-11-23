@@ -17,6 +17,13 @@
       "kv": "int8",
       "vision": "dynamic",
       "resident-experts": true
+    },
+    {
+      "alias": "Inkling-NVFP4",
+      "model": "models/Inkling-2-Mini-NVFP4-DQ8.basalt",
+      "max-context": 131072,
+      "kv": "fp8",
+      "vision": "dynamic"
     }
   ],
   "engine": {
