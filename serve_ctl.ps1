@@ -73,7 +73,7 @@ function Start-Server {
         Write-Line '[Basalt] The server is already running.'
     } else {
         if (-not (Test-Path $Engine)) { throw "not found: $Engine" }
-        Write-Line '[Basalt] Starting the server; the model loads in about 30-40 seconds...'
+        Write-Line '[Basalt] Starting the server; no model loads at startup - pick one in the web UI or let the first request load it...'
         # a minimized console, shown without stealing focus from the window you are working in
         $cmd = "cmd /c cd /d `"$Root`" && `"$Engine`" serve --config `"$Config`""
         Invoke-WmiCreate $cmd 7 | Out-Null
